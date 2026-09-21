@@ -1,7 +1,7 @@
 """
 AIHelixia Intelligence Engine
 Model Provider
-Version: 0.1.1
+Version: 0.4.3
 """
 
 from __future__ import annotations
@@ -14,19 +14,40 @@ class ModelProvider:
     """
     Zentrale Schnittstelle zwischen der AIHelixia Engine
     und dem verwendeten Sprachmodell.
+
+    Unterstützte Modi:
+    - auto
+    - cpu
+    - cuda
+
+    V0.4.3:
+    - explizite Device-Konfiguration
+    - Cloud-GPU-Unterstützung über CUDA
+    - lokale CPU-Unterstützung
+    - keine Änderung an der restlichen Engine notwendig
     """
 
     def __init__(
         self,
         model_name: str = "Qwen/Qwen2.5-0.5B-Instruct",
+        device: str = "auto",
     ) -> None:
 
         self.model_name = model_name
 
-        self.device = (
-            "cuda"
-            if torch.cuda.is_available()
-            else "cpu"
+        if device not in {
+            "auto",
+            "cpu",
+            "cuda",
+        }:
+            raise ValueError(
+                "device muss 'auto', 'cpu' oder 'cuda' sein."
+            )
+
+        self.requested_device = device
+
+        self.device = self._resolve_device(
+            device
         )
 
         self.tokenizer = None
@@ -34,20 +55,57 @@ class ModelProvider:
 
         self.status = "created"
 
+    @staticmethod
+    def _resolve_device(
+        device: str,
+    ) -> str:
+        """
+        Bestimmt das tatsächlich verwendete Gerät.
+        """
+
+        if device == "cpu":
+            return "cpu"
+
+        if device == "cuda":
+            if not torch.cuda.is_available():
+                raise RuntimeError(
+                    "CUDA wurde angefordert, ist aber "
+                    "auf diesem System nicht verfügbar."
+                )
+
+            return "cuda"
+
+        if torch.cuda.is_available():
+            return "cuda"
+
+        return "cpu"
+
     def load(self) -> dict[str, str]:
-        """Lädt Tokenizer und Modell."""
+        """
+        Lädt Tokenizer und Modell.
+        """
 
         self.tokenizer = AutoTokenizer.from_pretrained(
             self.model_name
         )
 
-        self.model = AutoModelForCausalLM.from_pretrained(
-            self.model_name,
-            torch_dtype=torch.float16
-            if self.device == "cuda"
-            else torch.float32,
-            device_map=self.device,
-        )
+        if self.device == "cuda":
+            self.model = (
+                AutoModelForCausalLM.from_pretrained(
+                    self.model_name,
+                    torch_dtype=torch.float16,
+                ).to("cuda")
+            )
+
+        else:
+            self.model = (
+                AutoModelForCausalLM.from_pretrained(
+                    self.model_name,
+                    torch_dtype=torch.float32,
+                ).to("cpu")
+            )
+
+        self.model.eval()
 
         self.status = "loaded"
 
@@ -58,7 +116,9 @@ class ModelProvider:
         prompt: str,
         max_new_tokens: int = 64,
     ) -> str:
-        """Erzeugt eine Antwort des Modells."""
+        """
+        Erzeugt eine Antwort des Modells.
+        """
 
         if self.model is None or self.tokenizer is None:
             raise RuntimeError(
@@ -85,7 +145,6 @@ class ModelProvider:
         ).to(self.device)
 
         with torch.no_grad():
-
             outputs = self.model.generate(
                 **inputs,
                 max_new_tokens=max_new_tokens,
@@ -104,11 +163,13 @@ class ModelProvider:
         return response.strip()
 
     def get_status(self) -> dict[str, str]:
-        """Gibt den Status des Model Providers zurück."""
+        """
+        Gibt den aktuellen Status des Model Providers zurück.
+        """
 
         return {
             "model": self.model_name,
+            "requested_device": self.requested_device,
             "device": self.device,
             "status": self.status,
         }
-
