@@ -20,7 +20,7 @@ from providers.model_provider import ModelProvider
 
 
 ENGINE_NAME = "AIHelixia Intelligence Engine"
-ENGINE_VERSION = "0.4.1"
+ENGINE_VERSION = "0.4.3"
 
 
 class AIHelixiaEngine:
@@ -117,6 +117,8 @@ class AIHelixiaEngine:
         """Startet die AIHelixia Engine."""
 
         self.core.start()
+
+        self.model_provider.load()
         self.perception.start()
         self.world_state.start()
         self.memory.start()
@@ -457,6 +459,6 @@ if __name__ == "__main__":
     print(engine.health())
 
     print()
-    print("AIHELIXIA V0.4.1 MEMORY RETRIEVAL INTEGRATED")
+    print("AIHELIXIA V0.4.3 GPU MODEL PROVIDER + MEMORY CLOSED LOOP")
 
     print("=" * 60)
