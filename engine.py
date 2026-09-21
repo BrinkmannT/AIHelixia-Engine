@@ -1,7 +1,7 @@
 """
 AIHelixia Intelligence Engine
 Core Engine
-Version: 0.3.0
+Version: 0.4.0
 """
 
 from __future__ import annotations
@@ -11,6 +11,7 @@ from core.decision import Decision
 from core.engine_core import EngineCore
 from core.evaluation import Evaluation
 from core.feedback import Feedback
+from core.memory import Memory
 from core.perception import Perception
 from core.prediction import Prediction
 from core.reasoning import Reasoning
@@ -19,18 +20,19 @@ from providers.model_provider import ModelProvider
 
 
 ENGINE_NAME = "AIHelixia Intelligence Engine"
-ENGINE_VERSION = "0.3.0"
+ENGINE_VERSION = "0.4.0"
 
 
 class AIHelixiaEngine:
     """
     Zentrale AIHelixia Engine.
 
-    V0.3.0:
+    V0.4.0:
     - Engine Core
     - Model Provider
     - Perception
     - World State
+    - Memory
     - Reasoning
     - Prediction
     - Decision
@@ -50,6 +52,7 @@ class AIHelixiaEngine:
         self.model_provider = ModelProvider()
         self.perception = Perception()
         self.world_state = WorldState()
+        self.memory = Memory()
         self.reasoning = Reasoning()
         self.prediction = Prediction()
         self.decision = Decision()
@@ -70,6 +73,11 @@ class AIHelixiaEngine:
         self.core.register_component(
             "world_state",
             self.world_state,
+        )
+
+        self.core.register_component(
+            "memory",
+            self.memory,
         )
 
         self.core.register_component(
@@ -110,6 +118,7 @@ class AIHelixiaEngine:
         self.core.start()
         self.perception.start()
         self.world_state.start()
+        self.memory.start()
         self.reasoning.start()
         self.prediction.start()
         self.decision.start()
@@ -130,6 +139,7 @@ class AIHelixiaEngine:
         self.decision.stop()
         self.prediction.stop()
         self.reasoning.stop()
+        self.memory.stop()
         self.world_state.stop()
         self.perception.stop()
         self.core.stop()
@@ -151,6 +161,7 @@ class AIHelixiaEngine:
             "model_status": self.model_provider.status,
             "perception": self.perception.get_status(),
             "world_state": self.world_state.get_status(),
+            "memory": self.memory.get_status(),
             "reasoning": self.reasoning.get_status(),
             "prediction": self.prediction.get_status(),
             "decision": self.decision.get_status(),
@@ -170,6 +181,7 @@ class AIHelixiaEngine:
             "model_provider": self.model_provider.status,
             "perception": self.perception.status,
             "world_state": self.world_state.status,
+            "memory": self.memory.status,
             "reasoning": self.reasoning.status,
             "prediction": self.prediction.status,
             "decision": self.decision.status,
@@ -190,6 +202,8 @@ class AIHelixiaEngine:
         Perception
           ↓
         World State
+          ↓
+        Memory
           ↓
         Reasoning
           ↓
@@ -222,36 +236,60 @@ class AIHelixiaEngine:
 
         world_state = self.world_state.get_state()
 
-        # 3. Reasoning
+        # 3. Memory: Observation speichern
+        observation_memory = self.memory.store(
+            memory_type="observation",
+            data=observation,
+        )
+
+        # 4. Reasoning
         reasoning = self.reasoning.analyze(
             world_state
         )
 
-        # 4. Prediction
+        # 5. Prediction
         prediction = self.prediction.predict(
             world_state=world_state,
             reasoning=reasoning,
         )
 
-        # 5. Decision
+        # 6. Decision
         decision = self.decision.decide(
             reasoning=reasoning,
             prediction=prediction,
         )
 
-        # 6. Action
+        # 7. Memory: Decision speichern
+        decision_memory = self.memory.store(
+            memory_type="decision",
+            data=decision,
+        )
+
+        # 8. Action
         action = self.action.execute(
             decision
         )
 
-        # 7. Evaluation
+        # 9. Evaluation
         evaluation = self.evaluation.evaluate(
             action
         )
 
-        # 8. Feedback
+        # 10. Memory: Evaluation speichern
+        evaluation_memory = self.memory.store(
+            memory_type="evaluation",
+            data=evaluation,
+        )
+
+        # 11. Feedback
         feedback = self.feedback.process(
             evaluation
+        )
+
+        # 12. Memory: Feedback speichern
+        feedback_memory = self.memory.store(
+            memory_type="feedback",
+            data=feedback,
         )
 
         return {
@@ -259,6 +297,12 @@ class AIHelixiaEngine:
             "perception": perception,
             "observation": observation,
             "world_state": world_state,
+            "memory": {
+                "observation": observation_memory,
+                "decision": decision_memory,
+                "evaluation": evaluation_memory,
+                "feedback": feedback_memory,
+            },
             "reasoning": reasoning,
             "prediction": prediction,
             "decision": decision,
@@ -353,10 +397,18 @@ if __name__ == "__main__":
     print(result["feedback"])
 
     print()
+    print("Memory:")
+    print(result["memory"])
+
+    print()
+    print("Memory status:")
+    print(engine.memory.get_status())
+
+    print()
     print("Health check:")
     print(engine.health())
 
     print()
-    print("AIHELIXIA V0.3.0 CLOSED LOOP READY")
+    print("AIHELIXIA V0.4.0 MEMORY INTEGRATED")
 
     print("=" * 60)
