@@ -1,7 +1,7 @@
 """
 AIHelixia Intelligence Engine
 Reasoning Layer
-Version: 0.2.0
+Version: 0.4.1
 """
 
 from __future__ import annotations
@@ -15,14 +15,16 @@ class Reasoning:
 
     Verantwortlichkeiten:
     - World State analysieren
+    - Memory berücksichtigen
     - Beobachtungen auswerten
-    - einfache Zustandsmerkmale ableiten
+    - Zustandsmerkmale ableiten
     - strukturierte Schlussfolgerungen erzeugen
 
-    V0.2.0:
+    V0.4.1:
     - deterministisch
+    - reproduzierbar
+    - Memory Retrieval
     - keine LLM-Abhängigkeit
-    - reproduzierbare Ergebnisse
     """
 
     def __init__(self) -> None:
@@ -41,12 +43,11 @@ class Reasoning:
     def analyze(
         self,
         world_state: dict[str, Any],
+        memory: list[dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
         """
-        Analysiert den aktuellen World State.
-
-        Die Methode erzeugt zunächst einfache,
-        deterministische Schlussfolgerungen.
+        Analysiert den aktuellen World State
+        und berücksichtigt vorhandene Memory-Einträge.
         """
 
         if self.status != "running":
@@ -59,6 +60,14 @@ class Reasoning:
             raise TypeError(
                 "World State muss ein Dictionary sein."
             )
+
+        if memory is not None and not isinstance(memory, list):
+            raise TypeError(
+                "Memory muss eine Liste sein."
+            )
+
+        if memory is None:
+            memory = []
 
         observations = world_state.get(
             "observations",
@@ -78,11 +87,24 @@ class Reasoning:
         observation_count = len(observations)
         entity_count = len(entities)
         condition_count = len(conditions)
+        memory_count = len(memory)
 
         if observation_count == 0:
             state_assessment = "no_observations"
         else:
             state_assessment = "observations_available"
+
+        memory_assessment = self._assess_memory(
+            memory
+        )
+
+        conclusions = self._build_conclusions(
+            observation_count=observation_count,
+            entity_count=entity_count,
+            condition_count=condition_count,
+            memory_count=memory_count,
+            memory_assessment=memory_assessment,
+        )
 
         return {
             "status": "analyzed",
@@ -90,11 +112,46 @@ class Reasoning:
             "observation_count": observation_count,
             "entity_count": entity_count,
             "condition_count": condition_count,
-            "conclusions": self._build_conclusions(
-                observation_count=observation_count,
-                entity_count=entity_count,
-                condition_count=condition_count,
-            ),
+            "memory_count": memory_count,
+            "memory_assessment": memory_assessment,
+            "conclusions": conclusions,
+        }
+
+    def _assess_memory(
+        self,
+        memory: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        """
+        Bewertet vorhandene Memory-Einträge.
+
+        Die Methode interpretiert die Inhalte noch nicht
+        fachlich. Sie bestimmt zunächst nur deren Struktur.
+        """
+
+        memory_types: dict[str, int] = {}
+
+        for entry in memory:
+            if not isinstance(entry, dict):
+                continue
+
+            memory_type = entry.get(
+                "type",
+                "unknown",
+            )
+
+            memory_types[memory_type] = (
+                memory_types.get(memory_type, 0) + 1
+            )
+
+        if not memory:
+            status = "no_memory"
+        else:
+            status = "memory_available"
+
+        return {
+            "status": status,
+            "entry_count": len(memory),
+            "types": memory_types,
         }
 
     def _build_conclusions(
@@ -102,6 +159,8 @@ class Reasoning:
         observation_count: int,
         entity_count: int,
         condition_count: int,
+        memory_count: int,
+        memory_assessment: dict[str, Any],
     ) -> list[dict[str, Any]]:
         """Erzeugt deterministische Schlussfolgerungen."""
 
@@ -139,6 +198,36 @@ class Reasoning:
                     "description": (
                         "Mindestens eine Bedingung "
                         "liegt im World State vor."
+                    ),
+                }
+            )
+
+        if memory_count > 0:
+            conclusions.append(
+                {
+                    "type": "memory_available",
+                    "value": True,
+                    "description": (
+                        "Frühere Verarbeitungsergebnisse "
+                        "stehen für das Reasoning zur Verfügung."
+                    ),
+                }
+            )
+
+        if (
+            memory_assessment.get("types", {}).get(
+                "feedback",
+                0,
+            )
+            > 0
+        ):
+            conclusions.append(
+                {
+                    "type": "historical_feedback_available",
+                    "value": True,
+                    "description": (
+                        "Früheres Feedback steht "
+                        "für die aktuelle Verarbeitung zur Verfügung."
                     ),
                 }
             )

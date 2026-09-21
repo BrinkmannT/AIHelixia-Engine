@@ -1,7 +1,7 @@
 """
 AIHelixia Intelligence Engine
 Core Engine
-Version: 0.4.0
+Version: 0.4.1
 """
 
 from __future__ import annotations
@@ -20,19 +20,20 @@ from providers.model_provider import ModelProvider
 
 
 ENGINE_NAME = "AIHelixia Intelligence Engine"
-ENGINE_VERSION = "0.4.0"
+ENGINE_VERSION = "0.4.1"
 
 
 class AIHelixiaEngine:
     """
     Zentrale AIHelixia Engine.
 
-    V0.4.0:
+    V0.4.1:
     - Engine Core
     - Model Provider
     - Perception
     - World State
     - Memory
+    - Memory Retrieval
     - Reasoning
     - Prediction
     - Decision
@@ -203,7 +204,7 @@ class AIHelixiaEngine:
           ↓
         World State
           ↓
-        Memory
+        Memory Retrieval
           ↓
         Reasoning
           ↓
@@ -216,6 +217,8 @@ class AIHelixiaEngine:
         Evaluation
           ↓
         Feedback
+          ↓
+        Memory
         """
 
         if self.status != "running":
@@ -236,57 +239,61 @@ class AIHelixiaEngine:
 
         world_state = self.world_state.get_state()
 
-        # 3. Memory: Observation speichern
+        # 3. Memory: aktuelle Observation speichern
         observation_memory = self.memory.store(
             memory_type="observation",
             data=observation,
         )
 
-        # 4. Reasoning
+        # 4. Memory Retrieval
+        memory_entries = self.memory.retrieve()
+
+        # 5. Reasoning mit Memory
         reasoning = self.reasoning.analyze(
-            world_state
+            world_state=world_state,
+            memory=memory_entries,
         )
 
-        # 5. Prediction
+        # 6. Prediction
         prediction = self.prediction.predict(
             world_state=world_state,
             reasoning=reasoning,
         )
 
-        # 6. Decision
+        # 7. Decision
         decision = self.decision.decide(
             reasoning=reasoning,
             prediction=prediction,
         )
 
-        # 7. Memory: Decision speichern
+        # 8. Memory: Decision speichern
         decision_memory = self.memory.store(
             memory_type="decision",
             data=decision,
         )
 
-        # 8. Action
+        # 9. Action
         action = self.action.execute(
             decision
         )
 
-        # 9. Evaluation
+        # 10. Evaluation
         evaluation = self.evaluation.evaluate(
             action
         )
 
-        # 10. Memory: Evaluation speichern
+        # 11. Memory: Evaluation speichern
         evaluation_memory = self.memory.store(
             memory_type="evaluation",
             data=evaluation,
         )
 
-        # 11. Feedback
+        # 12. Feedback
         feedback = self.feedback.process(
             evaluation
         )
 
-        # 12. Memory: Feedback speichern
+        # 13. Memory: Feedback speichern
         feedback_memory = self.memory.store(
             memory_type="feedback",
             data=feedback,
@@ -298,6 +305,7 @@ class AIHelixiaEngine:
             "observation": observation,
             "world_state": world_state,
             "memory": {
+                "retrieved": memory_entries,
                 "observation": observation_memory,
                 "decision": decision_memory,
                 "evaluation": evaluation_memory,
@@ -354,61 +362,101 @@ if __name__ == "__main__":
 
     print(engine.get_status())
 
-    print()
-    print("Running complete AIHelixia pipeline...")
+    # ==========================================================
+    # FIRST PROCESSING CYCLE
+    # ==========================================================
 
-    result = engine.process(
+    print()
+    print("FIRST PROCESSING CYCLE")
+    print("-" * 60)
+
+    result_1 = engine.process(
         "FactoryIQ erkennt eine Anomalie."
     )
 
     print()
-    print("PIPELINE RESULT")
-    print("-" * 60)
-
     print("Input:")
-    print(result["input"])
-
-    print()
-    print("Perception:")
-    print(result["perception"])
+    print(result_1["input"])
 
     print()
     print("Reasoning:")
-    print(result["reasoning"])
-
-    print()
-    print("Prediction:")
-    print(result["prediction"])
+    print(result_1["reasoning"])
 
     print()
     print("Decision:")
-    print(result["decision"])
-
-    print()
-    print("Action:")
-    print(result["action"])
+    print(result_1["decision"])
 
     print()
     print("Evaluation:")
-    print(result["evaluation"])
+    print(result_1["evaluation"])
 
     print()
     print("Feedback:")
-    print(result["feedback"])
+    print(result_1["feedback"])
 
     print()
-    print("Memory:")
-    print(result["memory"])
-
-    print()
-    print("Memory status:")
+    print("Memory count after first cycle:")
     print(engine.memory.get_status())
+
+    # ==========================================================
+    # SECOND PROCESSING CYCLE
+    # ==========================================================
+
+    print()
+    print("SECOND PROCESSING CYCLE")
+    print("-" * 60)
+
+    result_2 = engine.process(
+        "FactoryIQ erkennt erneut eine Anomalie."
+    )
+
+    print()
+    print("Input:")
+    print(result_2["input"])
+
+    print()
+    print("Reasoning:")
+    print(result_2["reasoning"])
+
+    print()
+    print("Decision:")
+    print(result_2["decision"])
+
+    print()
+    print("Evaluation:")
+    print(result_2["evaluation"])
+
+    print()
+    print("Feedback:")
+    print(result_2["feedback"])
+
+    # ==========================================================
+    # MEMORY VERIFICATION
+    # ==========================================================
+
+    print()
+    print("MEMORY VERIFICATION")
+    print("-" * 60)
+
+    print()
+    print("Retrieved Memory before second reasoning:")
+    print(
+        result_2["memory"]["retrieved"]
+    )
+
+    print()
+    print("Memory status after second cycle:")
+    print(engine.memory.get_status())
+
+    # ==========================================================
+    # HEALTH CHECK
+    # ==========================================================
 
     print()
     print("Health check:")
     print(engine.health())
 
     print()
-    print("AIHELIXIA V0.4.0 MEMORY INTEGRATED")
+    print("AIHELIXIA V0.4.1 MEMORY RETRIEVAL INTEGRATED")
 
     print("=" * 60)
