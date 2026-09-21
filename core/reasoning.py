@@ -1,7 +1,7 @@
 """
 AIHelixia Intelligence Engine
 Reasoning Layer
-Version: 0.4.1
+Version: 0.4.2
 """
 
 from __future__ import annotations
@@ -16,14 +16,16 @@ class Reasoning:
     Verantwortlichkeiten:
     - World State analysieren
     - Memory berücksichtigen
-    - Beobachtungen auswerten
-    - Zustandsmerkmale ableiten
+    - historisches Feedback auswerten
+    - Lernsignale ableiten
     - strukturierte Schlussfolgerungen erzeugen
 
-    V0.4.1:
+    V0.4.2:
     - deterministisch
     - reproduzierbar
     - Memory Retrieval
+    - Feedback Analysis
+    - Learning Signal
     - keine LLM-Abhängigkeit
     """
 
@@ -47,7 +49,7 @@ class Reasoning:
     ) -> dict[str, Any]:
         """
         Analysiert den aktuellen World State
-        und berücksichtigt vorhandene Memory-Einträge.
+        und berücksichtigt vorhandenes Memory.
         """
 
         if self.status != "running":
@@ -98,12 +100,21 @@ class Reasoning:
             memory
         )
 
+        feedback_analysis = self._analyze_feedback(
+            memory
+        )
+
+        learning_signal = self._build_learning_signal(
+            feedback_analysis
+        )
+
         conclusions = self._build_conclusions(
             observation_count=observation_count,
             entity_count=entity_count,
             condition_count=condition_count,
             memory_count=memory_count,
             memory_assessment=memory_assessment,
+            feedback_analysis=feedback_analysis,
         )
 
         return {
@@ -114,6 +125,8 @@ class Reasoning:
             "condition_count": condition_count,
             "memory_count": memory_count,
             "memory_assessment": memory_assessment,
+            "feedback_analysis": feedback_analysis,
+            "learning_signal": learning_signal,
             "conclusions": conclusions,
         }
 
@@ -122,10 +135,7 @@ class Reasoning:
         memory: list[dict[str, Any]],
     ) -> dict[str, Any]:
         """
-        Bewertet vorhandene Memory-Einträge.
-
-        Die Methode interpretiert die Inhalte noch nicht
-        fachlich. Sie bestimmt zunächst nur deren Struktur.
+        Bewertet die Struktur des vorhandenen Memorys.
         """
 
         memory_types: dict[str, int] = {}
@@ -154,6 +164,153 @@ class Reasoning:
             "types": memory_types,
         }
 
+    def _analyze_feedback(
+        self,
+        memory: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        """
+        Analysiert historische Feedback-Einträge.
+
+        Die Analyse bleibt deterministisch und wertet
+        ausschließlich bereits gespeicherte Signale aus.
+        """
+
+        feedback_entries = [
+            entry
+            for entry in memory
+            if isinstance(entry, dict)
+            and entry.get("type") == "feedback"
+        ]
+
+        positive_count = 0
+        negative_count = 0
+        error_count = 0
+
+        reinforce_count = 0
+        adjust_count = 0
+        review_count = 0
+
+        scores: list[float] = []
+
+        for entry in feedback_entries:
+
+            data = entry.get(
+                "data",
+                {},
+            )
+
+            if not isinstance(data, dict):
+                continue
+
+            feedback_type = data.get(
+                "feedback_type"
+            )
+
+            signal = data.get(
+                "signal"
+            )
+
+            score = data.get(
+                "score"
+            )
+
+            if feedback_type == "positive":
+                positive_count += 1
+
+            elif feedback_type == "negative":
+                negative_count += 1
+
+            elif feedback_type == "error":
+                error_count += 1
+
+            if signal == "reinforce":
+                reinforce_count += 1
+
+            elif signal == "adjust":
+                adjust_count += 1
+
+            elif signal == "review":
+                review_count += 1
+
+            if isinstance(score, (int, float)):
+                scores.append(float(score))
+
+        feedback_count = len(feedback_entries)
+
+        if feedback_count == 0:
+            assessment = "no_feedback"
+
+        elif negative_count > 0 or error_count > 0:
+            assessment = "adjustment_required"
+
+        elif positive_count > 0:
+            assessment = "positive_history"
+
+        else:
+            assessment = "feedback_available"
+
+        if scores:
+            average_score = (
+                sum(scores) / len(scores)
+            )
+        else:
+            average_score = None
+
+        return {
+            "status": assessment,
+            "feedback_count": feedback_count,
+            "positive_count": positive_count,
+            "negative_count": negative_count,
+            "error_count": error_count,
+            "reinforce_count": reinforce_count,
+            "adjust_count": adjust_count,
+            "review_count": review_count,
+            "average_score": average_score,
+        }
+
+    def _build_learning_signal(
+        self,
+        feedback_analysis: dict[str, Any],
+    ) -> dict[str, Any]:
+        """
+        Erzeugt ein strukturiertes Lernsignal
+        aus dem historischen Feedback.
+        """
+
+        status = feedback_analysis.get(
+            "status",
+            "no_feedback",
+        )
+
+        if status == "adjustment_required":
+            return {
+                "type": "adjust",
+                "priority": "high",
+                "reason": (
+                    "Historisches Feedback enthält "
+                    "negative oder fehlerhafte Ergebnisse."
+                ),
+            }
+
+        if status == "positive_history":
+            return {
+                "type": "reinforce",
+                "priority": "normal",
+                "reason": (
+                    "Historisches Feedback zeigt "
+                    "erfolgreiche Verarbeitung."
+                ),
+            }
+
+        return {
+            "type": "review",
+            "priority": "normal",
+            "reason": (
+                "Es liegt noch kein ausreichendes "
+                "historisches Feedback vor."
+            ),
+        }
+
     def _build_conclusions(
         self,
         observation_count: int,
@@ -161,6 +318,7 @@ class Reasoning:
         condition_count: int,
         memory_count: int,
         memory_assessment: dict[str, Any],
+        feedback_analysis: dict[str, Any],
     ) -> list[dict[str, Any]]:
         """Erzeugt deterministische Schlussfolgerungen."""
 
@@ -214,20 +372,46 @@ class Reasoning:
                 }
             )
 
-        if (
-            memory_assessment.get("types", {}).get(
-                "feedback",
-                0,
-            )
-            > 0
-        ):
+        if feedback_analysis.get(
+            "feedback_count",
+            0,
+        ) > 0:
             conclusions.append(
                 {
                     "type": "historical_feedback_available",
                     "value": True,
                     "description": (
-                        "Früheres Feedback steht "
-                        "für die aktuelle Verarbeitung zur Verfügung."
+                        "Historisches Feedback wurde "
+                        "für das aktuelle Reasoning ausgewertet."
+                    ),
+                }
+            )
+
+        if feedback_analysis.get(
+            "status"
+        ) == "positive_history":
+            conclusions.append(
+                {
+                    "type": "successful_history",
+                    "value": True,
+                    "description": (
+                        "Die bisherige Verarbeitungshistorie "
+                        "enthält erfolgreiche Ergebnisse."
+                    ),
+                }
+            )
+
+        if feedback_analysis.get(
+            "status"
+        ) == "adjustment_required":
+            conclusions.append(
+                {
+                    "type": "adjustment_required",
+                    "value": True,
+                    "description": (
+                        "Die bisherige Verarbeitungshistorie "
+                        "enthält Ergebnisse, die eine Anpassung "
+                        "erfordern."
                     ),
                 }
             )
