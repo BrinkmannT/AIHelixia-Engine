@@ -1,7 +1,7 @@
 """
 AIHelixia Intelligence Engine
 Decision Layer
-Version: 0.2.0
+Version: 0.4.3
 """
 
 from __future__ import annotations
@@ -16,12 +16,16 @@ class Decision:
     Verantwortlichkeiten:
     - Reasoning-Ergebnisse auswerten
     - Predictions berücksichtigen
-    - einen strukturierten nächsten Schritt bestimmen
-    - noch keine Aktion ausführen
+    - Learning Signals berücksichtigen
+    - strukturierten nächsten Schritt bestimmen
+    - noch keine externe Aktion ausführen
 
-    V0.2.0:
+    V0.4.3:
     - deterministisch
     - reproduzierbar
+    - Memory-aware
+    - Feedback-aware
+    - Learning Signal-aware
     - keine LLM-Abhängigkeit
     - keine externe Aktion
     """
@@ -46,7 +50,7 @@ class Decision:
     ) -> dict[str, Any]:
         """
         Erzeugt eine strukturierte Entscheidung auf Basis
-        von Reasoning und Prediction.
+        von Reasoning, Prediction und Learning Signal.
         """
 
         if self.status != "running":
@@ -75,17 +79,75 @@ class Decision:
             [],
         )
 
+        learning_signal = reasoning.get(
+            "learning_signal",
+            {},
+        )
+
+        if not isinstance(learning_signal, dict):
+            raise TypeError(
+                "Learning Signal muss ein Dictionary sein."
+            )
+
+        learning_type = learning_signal.get(
+            "type",
+            "review",
+        )
+
+        learning_priority = learning_signal.get(
+            "priority",
+            "normal",
+        )
+
         if state_assessment == "no_observations":
+
             decision_type = "wait"
             action = "observe"
+
             rationale = (
                 "Es liegen keine Beobachtungen vor. "
                 "Die Engine wartet auf weitere Informationen."
             )
 
+        elif learning_type == "adjust":
+
+            decision_type = "adjust"
+            action = "review_strategy"
+
+            rationale = (
+                "Historisches Feedback enthält negative "
+                "oder fehlerhafte Ergebnisse. "
+                "Die bisherige Strategie soll überprüft "
+                "und angepasst werden."
+            )
+
+        elif learning_type == "reinforce" and scenarios:
+
+            decision_type = "reinforce"
+            action = "continue_monitoring"
+
+            rationale = (
+                "Historisches Feedback zeigt erfolgreiche "
+                "Verarbeitung. Die bisherige Strategie "
+                "wird für den aktuellen Zustand beibehalten."
+            )
+
+        elif learning_type == "review":
+
+            decision_type = "review"
+            action = "observe"
+
+            rationale = (
+                "Es liegt noch kein ausreichendes historisches "
+                "Feedback vor. Der aktuelle Zustand soll "
+                "weiter beobachtet werden."
+            )
+
         elif scenarios:
+
             decision_type = "monitor"
             action = "continue_monitoring"
+
             rationale = (
                 "Es liegen Beobachtungen und mindestens "
                 "ein mögliches Szenario vor. "
@@ -93,8 +155,10 @@ class Decision:
             )
 
         else:
+
             decision_type = "wait"
             action = "observe"
+
             rationale = (
                 "Es konnte kein verwertbares Szenario "
                 "für eine weitere Entscheidung bestimmt werden."
@@ -106,6 +170,10 @@ class Decision:
             "action": action,
             "rationale": rationale,
             "scenario_count": len(scenarios),
+            "learning_signal": {
+                "type": learning_type,
+                "priority": learning_priority,
+            },
         }
 
     def get_status(self) -> dict[str, Any]:
