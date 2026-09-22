@@ -629,6 +629,6 @@ if __name__ == "__main__":
     print(engine.health())
 
     print()
-    print("AIHELIXIA V0.5.0 INDUSTRIAL CLOSED LOOP")
+    print("AIHELIXIA V0.5.1 INDUSTRIAL CLOSED LOOP")
 
     print("=" * 60)
