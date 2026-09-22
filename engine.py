@@ -1,7 +1,7 @@
 """
 AIHelixia Intelligence Engine
 Core Engine
-Version: 0.5.0
+Version: 0.5.1
 """
 
 from __future__ import annotations
@@ -20,7 +20,7 @@ from providers.model_provider import ModelProvider
 
 
 ENGINE_NAME = "AIHelixia Intelligence Engine"
-ENGINE_VERSION = "0.5.0"
+ENGINE_VERSION = "0.5.1"
 
 
 class AIHelixiaEngine:
