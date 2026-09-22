@@ -1,7 +1,7 @@
 """
 AIHelixia Intelligence Engine
 Action Layer
-Version: 0.2.0
+Version: 0.4.3
 """
 
 from __future__ import annotations
@@ -15,15 +15,18 @@ class Action:
 
     Verantwortlichkeiten:
     - Decision entgegennehmen
-    - definierte Aktionen ausführen
+    - definierte interne Aktionen ausführen
     - Ausführung protokollieren
     - Ergebnis strukturiert zurückgeben
 
-    V0.2.0:
+    V0.4.3:
     - deterministisch
+    - reproduzierbar
     - keine externen Systeme
     - keine autonomen externen Aktionen
-    - reproduzierbare Ergebnisse
+    - observe
+    - continue_monitoring
+    - review_strategy
     """
 
     def __init__(self) -> None:
@@ -45,8 +48,8 @@ class Action:
         decision: dict[str, Any],
     ) -> dict[str, Any]:
         """
-        Führt eine kontrollierte Aktion auf Basis
-        einer Decision aus.
+        Führt eine kontrollierte interne Aktion
+        auf Basis einer Decision aus.
         """
 
         if self.status != "running":
@@ -91,8 +94,8 @@ class Action:
         """
         Führt eine intern definierte Aktion aus.
 
-        In V0.2.0 werden noch keine externen Systeme
-        angesprochen.
+        In V0.4.3 werden weiterhin keine externen
+        Systeme angesprochen.
         """
 
         if action_name == "observe":
@@ -100,7 +103,8 @@ class Action:
                 "success": True,
                 "type": "observation",
                 "message": (
-                    "Engine wartet auf weitere Informationen."
+                    "Engine wartet auf weitere "
+                    "Informationen."
                 ),
             }
 
@@ -111,6 +115,18 @@ class Action:
                 "message": (
                     "Monitoring des aktuellen Zustands "
                     "wird fortgesetzt."
+                ),
+            }
+
+        if action_name == "review_strategy":
+            return {
+                "success": True,
+                "type": "strategy_review",
+                "message": (
+                    "Die bisherige Strategie wird "
+                    "intern überprüft und für die "
+                    "weitere Verarbeitung zur "
+                    "Anpassung vorgemerkt."
                 ),
             }
 
