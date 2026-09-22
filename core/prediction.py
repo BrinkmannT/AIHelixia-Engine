@@ -1,7 +1,14 @@
 """
 AIHelixia Intelligence Engine
 Prediction Layer
-Version: 0.2.0
+Version: 0.5.0
+
+Responsibilities:
+- Analyze current world state
+- Use reasoning results
+- Generate deterministic future scenarios
+- Support generic and industrial FactoryIQ state
+- Never confuse observed state with prediction
 """
 
 from __future__ import annotations
@@ -10,43 +17,34 @@ from typing import Any
 
 
 class Prediction:
-    """
-    Deterministische Prediction-Schicht der AIHelixia Engine.
-
-    Verantwortlichkeiten:
-    - aktuellen World State auswerten
-    - vorhandene Beobachtungen berücksichtigen
-    - mögliche nächste Zustände strukturieren
-    - Szenarien erzeugen
-
-    V0.2.0:
-    - deterministisch
-    - reproduzierbar
-    - keine LLM-Abhängigkeit
-    """
+    VERSION = "0.5.0"
 
     def __init__(self) -> None:
         self.status = "created"
+        self.prediction_count = 0
+        self.last_prediction: dict[str, Any] | None = None
 
-    def start(self) -> None:
-        """Startet die Prediction-Schicht."""
+    # ------------------------------------------------------------------
+    # Lifecycle
+    # ------------------------------------------------------------------
 
+    def start(self) -> dict[str, Any]:
         self.status = "running"
+        return self.get_status()
 
-    def stop(self) -> None:
-        """Stoppt die Prediction-Schicht."""
-
+    def stop(self) -> dict[str, Any]:
         self.status = "stopped"
+        return self.get_status()
+
+    # ------------------------------------------------------------------
+    # Main prediction
+    # ------------------------------------------------------------------
 
     def predict(
         self,
         world_state: dict[str, Any],
         reasoning: dict[str, Any],
     ) -> dict[str, Any]:
-        """
-        Erzeugt mögliche nächste Zustände auf Basis
-        des aktuellen World State und des Reasoning-Ergebnisses.
-        """
 
         if self.status != "running":
             raise RuntimeError(
@@ -55,116 +53,331 @@ class Prediction:
             )
 
         if not isinstance(world_state, dict):
-            raise TypeError(
-                "World State muss ein Dictionary sein."
-            )
+            raise TypeError("world_state muss ein Dictionary sein.")
 
         if not isinstance(reasoning, dict):
-            raise TypeError(
-                "Reasoning muss ein Dictionary sein."
-            )
+            raise TypeError("reasoning muss ein Dictionary sein.")
 
-        observation_count = len(
-            world_state.get("observations", [])
+        self.prediction_count += 1
+
+        scenarios: list[dict[str, Any]] = []
+
+        # --------------------------------------------------------------
+        # Generic state
+        # --------------------------------------------------------------
+
+        observations = world_state.get("observations", [])
+        entities = world_state.get("entities", [])
+        conditions = world_state.get("conditions", [])
+
+        observation_count = self._count(observations)
+        entity_count = self._count(entities)
+        condition_count = self._count(conditions)
+
+        if observation_count > 0:
+            scenarios.append({
+                "type": "state_persistence",
+                "source": "observations",
+                "confidence": "medium",
+                "description": (
+                    "Der beobachtete Zustand kann kurzfristig bestehen bleiben."
+                ),
+            })
+
+        if entity_count > 0:
+            scenarios.append({
+                "type": "entity_activity",
+                "source": "entities",
+                "confidence": "low",
+                "description": (
+                    "Vorhandene Entitäten können weiterhin aktiv sein."
+                ),
+            })
+
+        if condition_count > 0:
+            scenarios.append({
+                "type": "condition_change",
+                "source": "conditions",
+                "confidence": "low",
+                "description": (
+                    "Bestehende Bedingungen können sich verändern."
+                ),
+            })
+
+        # --------------------------------------------------------------
+        # Industrial state
+        # --------------------------------------------------------------
+
+        industrial_scenarios = self._predict_industrial_state(
+            world_state,
+            reasoning,
         )
 
-        entity_count = len(
-            world_state.get("entities", [])
-        )
+        scenarios.extend(industrial_scenarios)
 
-        condition_count = len(
-            world_state.get("conditions", [])
-        )
+        # --------------------------------------------------------------
+        # Empty state
+        # --------------------------------------------------------------
 
-        state_assessment = reasoning.get(
-            "state_assessment",
-            "unknown",
-        )
+        if not scenarios:
+            scenarios.append({
+                "type": "no_change",
+                "source": "world_state",
+                "confidence": "high",
+                "description": (
+                    "Es liegen noch keine ausreichenden Zustandsdaten "
+                    "für ein spezifisches Szenario vor."
+                ),
+            })
 
-        scenarios = self._build_scenarios(
-            observation_count=observation_count,
-            entity_count=entity_count,
-            condition_count=condition_count,
-            state_assessment=state_assessment,
-        )
-
-        return {
+        result = {
+            "component": "prediction",
+            "version": self.VERSION,
             "status": "predicted",
+            "prediction_id": self.prediction_count,
             "scenario_count": len(scenarios),
             "scenarios": scenarios,
         }
 
-    def _build_scenarios(
+        self.last_prediction = result
+
+        return result
+
+    # ------------------------------------------------------------------
+    # Industrial prediction
+    # ------------------------------------------------------------------
+
+    def _predict_industrial_state(
         self,
-        observation_count: int,
-        entity_count: int,
-        condition_count: int,
-        state_assessment: str,
+        world_state: dict[str, Any],
+        reasoning: dict[str, Any],
     ) -> list[dict[str, Any]]:
-        """Erzeugt deterministische Zukunftsszenarien."""
 
         scenarios: list[dict[str, Any]] = []
 
-        if state_assessment == "no_observations":
-            scenarios.append(
-                {
-                    "id": "scenario_1",
-                    "type": "no_change",
-                    "description": (
-                        "Keine Beobachtungen liegen vor. "
-                        "Der aktuelle Zustand bleibt unverändert."
-                    ),
-                    "confidence": "high",
-                }
-            )
+        machines = world_state.get("machines", [])
+        alarms = world_state.get("alarms", [])
+        production = world_state.get("production", {})
+        energy = world_state.get("energy", {})
 
-            return scenarios
+        industrial_analysis = reasoning.get(
+            "industrial_analysis",
+            {},
+        )
 
-        if observation_count > 0:
-            scenarios.append(
-                {
-                    "id": "scenario_1",
-                    "type": "state_persists",
-                    "description": (
-                        "Der aktuell beobachtete Zustand "
-                        "besteht zunächst weiter."
-                    ),
+        if not isinstance(industrial_analysis, dict):
+            industrial_analysis = {}
+
+        operational_signal = industrial_analysis.get(
+            "operational_signal"
+        )
+
+        # --------------------------------------------------------------
+        # Alarm persistence
+        # --------------------------------------------------------------
+
+        if len(alarms) > 0:
+            scenarios.append({
+                "type": "alarm_persistence",
+                "source": "alarms",
+                "confidence": "medium",
+                "description": (
+                    "Der bestehende industrielle Alarmzustand "
+                    "kann kurzfristig bestehen bleiben."
+                ),
+                "alarm_count": len(alarms),
+            })
+
+        # --------------------------------------------------------------
+        # Machine state
+        # --------------------------------------------------------------
+
+        if len(machines) > 0:
+
+            running_count = 0
+            stopped_count = 0
+            warning_count = 0
+
+            for machine in machines:
+
+                if not isinstance(machine, dict):
+                    continue
+
+                status = str(
+                    machine.get("status", "")
+                ).lower()
+
+                if status == "running":
+                    running_count += 1
+
+                elif status in {
+                    "stopped",
+                    "offline",
+                    "down",
+                }:
+                    stopped_count += 1
+
+                elif status in {
+                    "warning",
+                    "degraded",
+                }:
+                    warning_count += 1
+
+            if running_count > 0:
+                scenarios.append({
+                    "type": "machine_state_persistence",
+                    "source": "machines",
                     "confidence": "medium",
-                }
-            )
-
-        if entity_count > 0:
-            scenarios.append(
-                {
-                    "id": "scenario_2",
-                    "type": "entity_activity",
                     "description": (
-                        "Vorhandene Entitäten können ihren "
-                        "Zustand oder ihre Aktivität verändern."
+                        "Laufende Maschinen können ihren aktuellen "
+                        "Betriebszustand kurzfristig beibehalten."
                     ),
-                    "confidence": "low",
-                }
-            )
+                    "running_machine_count": running_count,
+                })
 
-        if condition_count > 0:
-            scenarios.append(
-                {
-                    "id": "scenario_3",
-                    "type": "condition_change",
+            if stopped_count > 0:
+                scenarios.append({
+                    "type": "machine_downtime_persistence",
+                    "source": "machines",
+                    "confidence": "medium",
                     "description": (
-                        "Vorhandene Bedingungen können sich "
-                        "im weiteren Verlauf verändern."
+                        "Ein erkannter Maschinenstillstand kann "
+                        "kurzfristig bestehen bleiben."
                     ),
-                    "confidence": "low",
-                }
-            )
+                    "stopped_machine_count": stopped_count,
+                })
+
+            if warning_count > 0:
+                scenarios.append({
+                    "type": "machine_warning_persistence",
+                    "source": "machines",
+                    "confidence": "medium",
+                    "description": (
+                        "Ein erkannter Maschinen-Warnzustand kann "
+                        "kurzfristig bestehen bleiben."
+                    ),
+                    "warning_machine_count": warning_count,
+                })
+
+        # --------------------------------------------------------------
+        # Operational signal
+        # --------------------------------------------------------------
+
+        if operational_signal == "critical_alarm":
+
+            scenarios.append({
+                "type": "potential_machine_risk",
+                "source": "industrial_analysis",
+                "confidence": "medium",
+                "priority": "high",
+                "description": (
+                    "Der erkannte kritische Alarmzustand weist auf "
+                    "ein erhöhtes operatives Risiko hin."
+                ),
+            })
+
+        elif operational_signal == "machine_stop_detected":
+
+            scenarios.append({
+                "type": "potential_production_impact",
+                "source": "industrial_analysis",
+                "confidence": "medium",
+                "priority": "high",
+                "description": (
+                    "Ein erkannter Maschinenstillstand kann "
+                    "Auswirkungen auf die Produktion haben."
+                ),
+            })
+
+        elif operational_signal == "machine_warning":
+
+            scenarios.append({
+                "type": "potential_machine_risk",
+                "source": "industrial_analysis",
+                "confidence": "low",
+                "priority": "medium",
+                "description": (
+                    "Ein Maschinen-Warnzustand kann auf ein "
+                    "zunehmendes operatives Risiko hinweisen."
+                ),
+            })
+
+        elif operational_signal == "warning_alarm":
+
+            scenarios.append({
+                "type": "potential_machine_risk",
+                "source": "industrial_analysis",
+                "confidence": "low",
+                "priority": "medium",
+                "description": (
+                    "Ein Warnalarm kann auf eine mögliche "
+                    "Verschlechterung des Maschinenzustands hinweisen."
+                ),
+            })
+
+        # --------------------------------------------------------------
+        # Production
+        # --------------------------------------------------------------
+
+        if production:
+
+            scenarios.append({
+                "type": "production_state_persistence",
+                "source": "production",
+                "confidence": "low",
+                "description": (
+                    "Der aktuelle Produktionszustand kann "
+                    "kurzfristig bestehen bleiben."
+                ),
+            })
+
+        # --------------------------------------------------------------
+        # Energy
+        # --------------------------------------------------------------
+
+        if energy:
+
+            scenarios.append({
+                "type": "energy_state_persistence",
+                "source": "energy",
+                "confidence": "low",
+                "description": (
+                    "Der aktuelle Energiezustand kann "
+                    "kurzfristig bestehen bleiben."
+                ),
+            })
 
         return scenarios
 
+    # ------------------------------------------------------------------
+    # Helpers
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _count(value: Any) -> int:
+
+        if value is None:
+            return 0
+
+        if isinstance(value, (list, tuple, set, dict)):
+            return len(value)
+
+        return 1
+
+    # ------------------------------------------------------------------
+    # Status
+    # ------------------------------------------------------------------
+
     def get_status(self) -> dict[str, Any]:
-        """Gibt den aktuellen Status zurück."""
 
         return {
             "component": "prediction",
+            "version": self.VERSION,
             "status": self.status,
+            "prediction_count": self.prediction_count,
+            "last_prediction_id": (
+                self.last_prediction.get("prediction_id")
+                if self.last_prediction
+                else None
+            ),
         }

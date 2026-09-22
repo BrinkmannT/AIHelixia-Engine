@@ -1,7 +1,7 @@
 """
 AIHelixia Intelligence Engine
 Core Engine
-Version: 0.5.0
+Version: 0.4.1
 """
 
 from __future__ import annotations
@@ -20,22 +20,22 @@ from providers.model_provider import ModelProvider
 
 
 ENGINE_NAME = "AIHelixia Intelligence Engine"
-ENGINE_VERSION = "0.5.0"
+ENGINE_VERSION = "0.4.3"
 
 
 class AIHelixiaEngine:
     """
     Zentrale AIHelixia Engine.
 
-    V0.5.0:
+    V0.4.1:
     - Engine Core
     - Model Provider
     - Perception
-    - Industrial World State
+    - World State
     - Memory
     - Memory Retrieval
-    - Industrial Reasoning
-    - Industrial Prediction
+    - Reasoning
+    - Prediction
     - Decision
     - Action
     - Evaluation
@@ -113,17 +113,12 @@ class AIHelixiaEngine:
 
         self.status = "created"
 
-    # ------------------------------------------------------------------
-    # Lifecycle
-    # ------------------------------------------------------------------
-
     def start(self) -> dict[str, object]:
         """Startet die AIHelixia Engine."""
 
         self.core.start()
 
         self.model_provider.load()
-
         self.perception.start()
         self.world_state.start()
         self.memory.start()
@@ -156,11 +151,8 @@ class AIHelixiaEngine:
 
         return self.get_status()
 
-    # ------------------------------------------------------------------
-    # Status
-    # ------------------------------------------------------------------
-
     def get_status(self) -> dict[str, object]:
+        """Gibt den aktuellen Engine-Status zurück."""
 
         return {
             "name": self.name,
@@ -182,6 +174,7 @@ class AIHelixiaEngine:
         }
 
     def health(self) -> dict[str, object]:
+        """Führt einen Health Check durch."""
 
         return {
             "engine": self.name,
@@ -199,116 +192,6 @@ class AIHelixiaEngine:
             "evaluation": self.evaluation.status,
             "feedback": self.feedback.status,
         }
-
-    # ------------------------------------------------------------------
-    # FactoryIQ Industrial State
-    # ------------------------------------------------------------------
-
-    def configure_factory(
-        self,
-        factory: dict[str, object],
-    ) -> dict[str, object]:
-
-        if self.status != "running":
-            raise RuntimeError(
-                "AIHelixia Engine ist nicht gestartet."
-            )
-
-        return self.world_state.set_factory(factory)
-
-    def add_machine(
-        self,
-        machine: dict[str, object],
-    ) -> dict[str, object]:
-
-        if self.status != "running":
-            raise RuntimeError(
-                "AIHelixia Engine ist nicht gestartet."
-            )
-
-        return self.world_state.add_machine(machine)
-
-    def add_sensor(
-        self,
-        sensor: dict[str, object],
-    ) -> dict[str, object]:
-
-        if self.status != "running":
-            raise RuntimeError(
-                "AIHelixia Engine ist nicht gestartet."
-            )
-
-        return self.world_state.add_sensor(sensor)
-
-    def add_production_line(
-        self,
-        production_line: dict[str, object],
-    ) -> dict[str, object]:
-
-        if self.status != "running":
-            raise RuntimeError(
-                "AIHelixia Engine ist nicht gestartet."
-            )
-
-        return self.world_state.add_production_line(
-            production_line
-        )
-
-    def set_production(
-        self,
-        production: dict[str, object],
-    ) -> dict[str, object]:
-
-        if self.status != "running":
-            raise RuntimeError(
-                "AIHelixia Engine ist nicht gestartet."
-            )
-
-        return self.world_state.set_production(
-            production
-        )
-
-    def set_energy(
-        self,
-        energy: dict[str, object],
-    ) -> dict[str, object]:
-
-        if self.status != "running":
-            raise RuntimeError(
-                "AIHelixia Engine ist nicht gestartet."
-            )
-
-        return self.world_state.set_energy(energy)
-
-    def set_maintenance(
-        self,
-        maintenance: dict[str, object],
-    ) -> dict[str, object]:
-
-        if self.status != "running":
-            raise RuntimeError(
-                "AIHelixia Engine ist nicht gestartet."
-            )
-
-        return self.world_state.set_maintenance(
-            maintenance
-        )
-
-    def add_alarm(
-        self,
-        alarm: dict[str, object],
-    ) -> dict[str, object]:
-
-        if self.status != "running":
-            raise RuntimeError(
-                "AIHelixia Engine ist nicht gestartet."
-            )
-
-        return self.world_state.add_alarm(alarm)
-
-    # ------------------------------------------------------------------
-    # Closed Loop
-    # ------------------------------------------------------------------
 
     def process(
         self,
@@ -347,85 +230,72 @@ class AIHelixiaEngine:
             )
 
         # 1. Perception
-
         perception = self.perception.perceive(
             input_data
         )
 
-        # 2. Generic observation
-
+        # 2. World State
         observation = self.world_state.add_observation(
             perception
         )
 
         world_state = self.world_state.get_state()
 
-        # 3. Memory: aktuelle Observation
-
+        # 3. Memory: aktuelle Observation speichern
         observation_memory = self.memory.store(
             memory_type="observation",
             data=observation,
         )
 
         # 4. Memory Retrieval
-
         memory_entries = self.memory.retrieve()
 
-        # 5. Reasoning
-
+        # 5. Reasoning mit Memory
         reasoning = self.reasoning.analyze(
             world_state=world_state,
             memory=memory_entries,
         )
 
         # 6. Prediction
-
         prediction = self.prediction.predict(
             world_state=world_state,
             reasoning=reasoning,
         )
 
         # 7. Decision
-
         decision = self.decision.decide(
             reasoning=reasoning,
             prediction=prediction,
         )
 
-        # 8. Memory: Decision
-
+        # 8. Memory: Decision speichern
         decision_memory = self.memory.store(
             memory_type="decision",
             data=decision,
         )
 
         # 9. Action
-
         action = self.action.execute(
             decision
         )
 
         # 10. Evaluation
-
         evaluation = self.evaluation.evaluate(
             action
         )
 
-        # 11. Memory: Evaluation
-
+        # 11. Memory: Evaluation speichern
         evaluation_memory = self.memory.store(
             memory_type="evaluation",
             data=evaluation,
         )
 
         # 12. Feedback
-
         feedback = self.feedback.process(
             evaluation
         )
 
-        # 13. Memory: Feedback
-
+        # 13. Memory: Feedback speichern
         feedback_memory = self.memory.store(
             memory_type="feedback",
             data=feedback,
@@ -451,15 +321,17 @@ class AIHelixiaEngine:
             "feedback": feedback,
         }
 
-    # ------------------------------------------------------------------
-    # LLM access
-    # ------------------------------------------------------------------
-
     def ask(
         self,
         prompt: str,
         max_new_tokens: int = 64,
     ) -> str:
+        """
+        Verarbeitet eine Anfrage über den Model Provider.
+
+        Das Modell wird nur verwendet,
+        wenn es geladen wurde.
+        """
 
         if self.status != "running":
             raise RuntimeError(
@@ -472,10 +344,6 @@ class AIHelixiaEngine:
             max_new_tokens=max_new_tokens,
         )
 
-
-# ----------------------------------------------------------------------
-# Demo
-# ----------------------------------------------------------------------
 
 if __name__ == "__main__":
 
@@ -496,83 +364,29 @@ if __name__ == "__main__":
 
     print(engine.get_status())
 
-    # --------------------------------------------------------------
-    # FactoryIQ Demo Factory
-    # --------------------------------------------------------------
-
-    engine.configure_factory({
-        "id": "F-001",
-        "name": "FactoryIQ Demo Plant",
-    })
-
-    engine.add_production_line({
-        "id": "L-01",
-        "name": "Production Line 01",
-        "status": "running",
-    })
-
-    engine.add_machine({
-        "id": "M-204",
-        "status": "running",
-        "temperature": 87.4,
-        "vibration": 6.8,
-    })
-
-    engine.add_sensor({
-        "id": "S-01",
-        "machine_id": "M-204",
-        "type": "temperature",
-        "value": 87.4,
-    })
-
-    engine.set_production({
-        "output": 1250,
-        "unit": "units",
-    })
-
-    engine.set_energy({
-        "power_consumption": 114.0,
-        "unit": "kW",
-    })
-
-    engine.set_maintenance({
-        "last_service": "2026-09-01",
-        "next_service": "2026-10-01",
-    })
-
-    engine.add_alarm({
-        "machine_id": "M-204",
-        "type": "temperature",
-        "severity": "warning",
-    })
-
-    # --------------------------------------------------------------
-    # FIRST CYCLE
-    # --------------------------------------------------------------
+    # ==========================================================
+    # FIRST PROCESSING CYCLE
+    # ==========================================================
 
     print()
-    print("FIRST INDUSTRIAL PROCESSING CYCLE")
+    print("FIRST PROCESSING CYCLE")
     print("-" * 60)
 
     result_1 = engine.process(
-        "FactoryIQ erkennt einen Temperatur-Warnalarm an Maschine M-204."
+        "FactoryIQ erkennt eine Anomalie."
     )
+
+    print()
+    print("Input:")
+    print(result_1["input"])
 
     print()
     print("Reasoning:")
     print(result_1["reasoning"])
 
     print()
-    print("Prediction:")
-    print(result_1["prediction"])
-
-    print()
     print("Decision:")
     print(result_1["decision"])
-
-    print()
-    print("Action:")
-    print(result_1["action"])
 
     print()
     print("Evaluation:")
@@ -583,52 +397,68 @@ if __name__ == "__main__":
     print(result_1["feedback"])
 
     print()
-    print("Memory:")
+    print("Memory count after first cycle:")
     print(engine.memory.get_status())
 
-    # --------------------------------------------------------------
-    # SECOND CYCLE
-    # --------------------------------------------------------------
+    # ==========================================================
+    # SECOND PROCESSING CYCLE
+    # ==========================================================
 
     print()
-    print("SECOND INDUSTRIAL PROCESSING CYCLE")
+    print("SECOND PROCESSING CYCLE")
     print("-" * 60)
 
     result_2 = engine.process(
-        "FactoryIQ erkennt erneut einen Temperatur-Warnalarm an Maschine M-204."
+        "FactoryIQ erkennt erneut eine Anomalie."
     )
+
+    print()
+    print("Input:")
+    print(result_2["input"])
 
     print()
     print("Reasoning:")
     print(result_2["reasoning"])
 
     print()
-    print("Prediction:")
-    print(result_2["prediction"])
-
-    print()
     print("Decision:")
     print(result_2["decision"])
+
+    print()
+    print("Evaluation:")
+    print(result_2["evaluation"])
 
     print()
     print("Feedback:")
     print(result_2["feedback"])
 
-    print()
-    print("Memory:")
-    print(engine.memory.get_status())
-
-    # --------------------------------------------------------------
-    # HEALTH
-    # --------------------------------------------------------------
+    # ==========================================================
+    # MEMORY VERIFICATION
+    # ==========================================================
 
     print()
-    print("HEALTH CHECK")
+    print("MEMORY VERIFICATION")
     print("-" * 60)
 
+    print()
+    print("Retrieved Memory before second reasoning:")
+    print(
+        result_2["memory"]["retrieved"]
+    )
+
+    print()
+    print("Memory status after second cycle:")
+    print(engine.memory.get_status())
+
+    # ==========================================================
+    # HEALTH CHECK
+    # ==========================================================
+
+    print()
+    print("Health check:")
     print(engine.health())
 
     print()
-    print("AIHELIXIA V0.5.0 INDUSTRIAL CLOSED LOOP")
+    print("AIHELIXIA V0.4.3 GPU MODEL PROVIDER + MEMORY CLOSED LOOP")
 
     print("=" * 60)

@@ -10,7 +10,7 @@ from typing import Any
 
 
 class Reasoning:
-    VERSION = "0.5.1"
+    VERSION = "0.5.0"
 
     def __init__(self) -> None:
         self.status = "created"
@@ -276,14 +276,7 @@ class Reasoning:
         for feedback in feedback_entries:
 
             feedback_type = feedback.get("feedback_type")
-
-            # V0.5.1: Feedback verwendet "signal".
-            # "action" bleibt als Fallback für ältere Memory-Einträge erhalten.
-            signal = feedback.get("signal")
-
-            if signal is None:
-                signal = feedback.get("action")
-
+            action = feedback.get("action")
             score = feedback.get("score")
 
             if feedback_type == "positive":
@@ -293,11 +286,11 @@ class Reasoning:
             elif feedback_type == "error":
                 error_count += 1
 
-            if signal == "reinforce":
+            if action == "reinforce":
                 reinforce_count += 1
-            elif signal == "adjust":
+            elif action == "adjust":
                 adjust_count += 1
-            elif signal == "review":
+            elif action == "review":
                 review_count += 1
 
             if isinstance(score, (int, float)):
