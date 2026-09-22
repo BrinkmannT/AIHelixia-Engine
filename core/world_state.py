@@ -1,7 +1,7 @@
 """
 AIHelixia Intelligence Engine
 World State
-Version: 0.5.0
+Version: 0.6.0
 """
 
 from __future__ import annotations
@@ -25,6 +25,8 @@ class WorldState:
     - keine LLM-Abhängigkeit
     - keine fachliche Interpretation
     """
+
+    VERSION = "0.6.0"
 
     def __init__(self) -> None:
         self.status = "created"
@@ -226,14 +228,23 @@ class WorldState:
         self._update_timestamp()
 
     def get_status(self) -> dict[str, Any]:
-        """Gibt den Status des World State zurück."""
+        """Gibt den vollständigen Status des World State zurück."""
 
         return {
             "component": "world_state",
+            "version": self.VERSION,
             "status": self.status,
             "observation_count": len(self.observations),
             "entity_count": len(self.entities),
             "condition_count": len(self.conditions),
+            "factory_available": bool(self.factory),
+            "production_line_count": len(self.production_lines),
+            "machine_count": len(self.machines),
+            "sensor_count": len(self.sensors),
+            "production_available": bool(self.production),
+            "energy_available": bool(self.energy),
+            "maintenance_available": bool(self.maintenance),
+            "alarm_count": len(self.alarms),
             "updated_at": self.updated_at,
         }
 
