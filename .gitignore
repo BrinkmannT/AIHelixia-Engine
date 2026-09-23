@@ -21,3 +21,8 @@ Thumbs.db
 !.env.example
 
 *.log
+# Local runtime data
+data/
+
+# Local backup files
+*.backup
