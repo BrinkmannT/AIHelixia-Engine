@@ -1,7 +1,7 @@
 """
 AIHelixia Intelligence Engine
 Persistence Layer
-Version: 0.1.0
+Version: 0.3.0
 """
 
 from __future__ import annotations
@@ -17,21 +17,27 @@ class Persistence:
     """
     Dauerhafte Speicherung für FactoryIQ und AIHelixia.
 
-    Verantwortlichkeiten:
-    - Factory-Zustände speichern
-    - Messwerte speichern
-    - Alarme speichern
-    - Engine-Events speichern
-    - AI-Ergebnisse speichern
-    - Historische Daten abrufen
-
-    Keine fachliche Analyse.
-    Keine Prediction.
-    Keine Decision.
-    Keine LLM-Abhängigkeit.
+    V0.3.0:
+    - Factory-Zustände
+    - Messwerte
+    - Alarme
+    - Engine-Events
+    - AI-Ergebnisse
+    - Historie
+    - Latest-Abfragen
+    - ID-Abfragen
+    - Zeitbereichsabfragen
     """
 
-    VERSION = "0.2.0"
+    VERSION = "0.3.0"
+
+    ALLOWED_TABLES = {
+        "factory_states",
+        "measurements",
+        "alarms",
+        "engine_events",
+        "ai_results",
+    }
 
     def __init__(
         self,
@@ -42,10 +48,6 @@ class Persistence:
         self.connection: sqlite3.Connection | None = None
 
     def start(self) -> None:
-        """
-        Startet die Persistence-Schicht und initialisiert
-        die SQLite-Datenbank inklusive Schema.
-        """
         if self.status == "running":
             return
 
@@ -59,17 +61,11 @@ class Persistence:
         )
 
         self.connection.row_factory = sqlite3.Row
-
-        # Wichtig:
-        # _create_schema() benötigt eine aktive Persistence.
         self.status = "running"
 
         self._create_schema()
 
     def stop(self) -> None:
-        """
-        Beendet die Datenbankverbindung.
-        """
         if self.connection is not None:
             self.connection.close()
 
@@ -77,10 +73,10 @@ class Persistence:
         self.status = "stopped"
 
     def _require_connection(self) -> sqlite3.Connection:
-        """
-        Stellt sicher, dass Persistence aktiv ist.
-        """
-        if self.status != "running" or self.connection is None:
+        if (
+            self.status != "running"
+            or self.connection is None
+        ):
             raise RuntimeError(
                 "Persistence ist nicht gestartet."
             )
@@ -88,9 +84,6 @@ class Persistence:
         return self.connection
 
     def _create_schema(self) -> None:
-        """
-        Erstellt das Datenbankschema, falls es noch nicht existiert.
-        """
         connection = self._require_connection()
 
         connection.executescript(
@@ -143,31 +136,67 @@ class Persistence:
 
     @staticmethod
     def _timestamp() -> str:
-        """
-        Liefert einen UTC-Zeitstempel im ISO-8601-Format.
-        """
         return datetime.now(
             timezone.utc
         ).isoformat()
 
     @staticmethod
     def _json(data: Any) -> str:
-        """
-        Serialisiert Daten sicher als JSON.
-        """
         return json.dumps(
             data,
             ensure_ascii=False,
             default=str,
         )
 
+    @staticmethod
+    def _decode_row(
+        row: sqlite3.Row,
+    ) -> dict[str, Any]:
+        result = dict(row)
+
+        raw_data = result.get("data")
+
+        if isinstance(raw_data, str):
+            try:
+                result["data"] = json.loads(raw_data)
+            except json.JSONDecodeError:
+                pass
+
+        return result
+
+    def _validate_table(
+        self,
+        table: str,
+    ) -> None:
+        if table not in self.ALLOWED_TABLES:
+            raise ValueError(
+                f"Unbekannte Persistence-Tabelle: {table}"
+            )
+
+    @staticmethod
+    def _validate_limit(
+        limit: int,
+    ) -> None:
+        if limit < 1:
+            raise ValueError(
+                "limit muss größer als 0 sein."
+            )
+
+    @staticmethod
+    def _validate_timestamp(
+        timestamp: str,
+    ) -> None:
+        try:
+            datetime.fromisoformat(timestamp)
+        except ValueError as exc:
+            raise ValueError(
+                f"Ungültiger ISO-8601-Zeitstempel: {timestamp}"
+            ) from exc
+
     def save_factory_state(
         self,
         factory_state: dict[str, Any],
     ) -> int:
-        """
-        Speichert einen vollständigen Factory-Zustand.
-        """
         connection = self._require_connection()
 
         factory = factory_state.get(
@@ -204,9 +233,6 @@ class Persistence:
         self,
         measurement: dict[str, Any],
     ) -> int:
-        """
-        Speichert einen einzelnen Messwert.
-        """
         connection = self._require_connection()
 
         cursor = connection.execute(
@@ -242,9 +268,6 @@ class Persistence:
         self,
         alarm: dict[str, Any],
     ) -> int:
-        """
-        Speichert einen Alarm.
-        """
         connection = self._require_connection()
 
         cursor = connection.execute(
@@ -283,9 +306,6 @@ class Persistence:
         event_type: str,
         data: dict[str, Any],
     ) -> int:
-        """
-        Speichert ein Engine-Ereignis.
-        """
         connection = self._require_connection()
 
         cursor = connection.execute(
@@ -313,9 +333,6 @@ class Persistence:
         result_type: str,
         data: dict[str, Any],
     ) -> int:
-        """
-        Speichert ein Ergebnis der AI-Pipeline.
-        """
         connection = self._require_connection()
 
         cursor = connection.execute(
@@ -343,28 +360,10 @@ class Persistence:
         table: str,
         limit: int = 100,
     ) -> list[dict[str, Any]]:
-        """
-        Gibt historische Datensätze einer erlaubten Tabelle zurück.
-        """
         connection = self._require_connection()
 
-        allowed_tables = {
-            "factory_states",
-            "measurements",
-            "alarms",
-            "engine_events",
-            "ai_results",
-        }
-
-        if table not in allowed_tables:
-            raise ValueError(
-                f"Unbekannte Persistence-Tabelle: {table}"
-            )
-
-        if limit < 1:
-            raise ValueError(
-                "limit muss größer als 0 sein."
-            )
+        self._validate_table(table)
+        self._validate_limit(limit)
 
         rows = connection.execute(
             f"""
@@ -377,19 +376,111 @@ class Persistence:
         ).fetchall()
 
         return [
-            dict(row)
+            self._decode_row(row)
+            for row in rows
+        ]
+
+    def get_latest(
+        self,
+        table: str,
+    ) -> dict[str, Any] | None:
+        connection = self._require_connection()
+
+        self._validate_table(table)
+
+        row = connection.execute(
+            f"""
+            SELECT *
+            FROM {table}
+            ORDER BY id DESC
+            LIMIT 1
+            """
+        ).fetchone()
+
+        if row is None:
+            return None
+
+        return self._decode_row(row)
+
+    def get_by_id(
+        self,
+        table: str,
+        record_id: int,
+    ) -> dict[str, Any] | None:
+        connection = self._require_connection()
+
+        self._validate_table(table)
+
+        if record_id < 1:
+            raise ValueError(
+                "record_id muss größer als 0 sein."
+            )
+
+        row = connection.execute(
+            f"""
+            SELECT *
+            FROM {table}
+            WHERE id = ?
+            LIMIT 1
+            """,
+            (record_id,),
+        ).fetchone()
+
+        if row is None:
+            return None
+
+        return self._decode_row(row)
+
+    def get_history_by_time(
+        self,
+        table: str,
+        start_time: str,
+        end_time: str,
+        limit: int = 100,
+    ) -> list[dict[str, Any]]:
+        connection = self._require_connection()
+
+        self._validate_table(table)
+        self._validate_limit(limit)
+
+        self._validate_timestamp(start_time)
+        self._validate_timestamp(end_time)
+
+        if start_time > end_time:
+            raise ValueError(
+                "start_time darf nicht nach end_time liegen."
+            )
+
+        rows = connection.execute(
+            f"""
+            SELECT *
+            FROM {table}
+            WHERE timestamp >= ?
+              AND timestamp <= ?
+            ORDER BY timestamp DESC, id DESC
+            LIMIT ?
+            """,
+            (
+                start_time,
+                end_time,
+                limit,
+            ),
+        ).fetchall()
+
+        return [
+            self._decode_row(row)
             for row in rows
         ]
 
     def get_status(self) -> dict[str, Any]:
-        """
-        Gibt den aktuellen Zustand der Persistence-Schicht zurück.
-        """
         return {
             "component": "persistence",
             "version": self.VERSION,
             "status": self.status,
             "database_path": str(
                 self.database_path
+            ),
+            "tables": sorted(
+                self.ALLOWED_TABLES
             ),
         }
