@@ -108,6 +108,9 @@ class AIHelixiaEngine:
         self.perception.start()
         self.factory_input.start()
         self.world_state.start()
+
+        restore_result = self._restore_latest_factory_state()
+
         self.memory.start()
         self.reasoning.start()
         self.prediction.start()
@@ -126,8 +129,85 @@ class AIHelixiaEngine:
             {
                 "engine_version": self.VERSION,
                 "components": self.components,
+                "factory_restore": restore_result,
             },
         )
+
+    def _restore_latest_factory_state(self) -> dict[str, object]:
+        """
+        Restore the latest persisted FactoryIQ state into WorldState.
+        """
+
+        history = self.persistence.get_history(
+            "factory_states",
+            limit=1,
+        )
+
+        if not history:
+            return {
+                "status": "no_persisted_factory_state",
+                "restored": False,
+            }
+
+        latest = history[0]
+
+        if not isinstance(latest, dict):
+            return {
+                "status": "invalid_persisted_factory_state",
+                "restored": False,
+            }
+
+        persisted_data = latest.get("data", {})
+
+        if not isinstance(persisted_data, dict):
+            return {
+                "status": "invalid_persisted_factory_data",
+                "restored": False,
+            }
+
+        factory_data = {
+            field: persisted_data[field]
+            for field in (
+                "factory",
+                "production_lines",
+                "machines",
+                "sensors",
+                "production",
+                "energy",
+                "maintenance",
+                "alarms",
+            )
+            if field in persisted_data
+        }
+
+        if not factory_data:
+            return {
+                "status": "empty_persisted_factory_data",
+                "restored": False,
+            }
+
+        restore_result = self.factory_input.ingest(
+            factory_data=factory_data,
+            world_state=self.world_state,
+        )
+
+        return {
+            "status": "restored",
+            "restored": True,
+            "source_id": latest.get("id"),
+            "factory_id": (
+                persisted_data.get("factory", {}).get("id")
+                if isinstance(
+                    persisted_data.get("factory"),
+                    dict,
+                )
+                else None
+            ),
+            "processed": restore_result.get(
+                "processed",
+                {},
+            ),
+        }
 
     def stop(self) -> None:
         if self.status == "stopped":

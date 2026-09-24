@@ -11,6 +11,7 @@ from typing import Any
 from fastapi import FastAPI, HTTPException
 
 from engine import AIHelixiaEngine
+from factoryiq.pilot import FactoryIQPilot
 
 
 VERSION = "0.1.0"
@@ -24,6 +25,7 @@ app = FastAPI(
 
 
 engine = AIHelixiaEngine()
+pilot = FactoryIQPilot(engine)
 
 
 def ensure_persistence() -> None:
@@ -40,6 +42,57 @@ def root() -> dict[str, Any]:
         "engine_version": engine.VERSION,
         "status": "online",
     }
+
+
+@app.get("/factory/overview")
+@app.get("/factory/intelligence")
+@app.get("/factory/dashboard")
+def factory_dashboard() -> dict[str, Any]:
+    try:
+        if engine.status != "running":
+            raise HTTPException(
+                status_code=409,
+                detail="Engine ist nicht gestartet.",
+            )
+
+        return pilot.build_dashboard()
+
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=str(exc),
+        ) from exc
+
+
+def factory_intelligence() -> dict[str, Any]:
+    try:
+        if engine.status != "running":
+            raise HTTPException(
+                status_code=409,
+                detail="Engine ist nicht gestartet.",
+            )
+
+        return pilot.build_intelligence()
+
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=str(exc),
+        ) from exc
+
+
+def factory_overview() -> dict[str, Any]:
+    try:
+        return pilot.build_overview()
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=str(exc),
+        ) from exc
 
 
 @app.get("/health")
