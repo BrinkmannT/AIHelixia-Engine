@@ -243,6 +243,24 @@ class Reasoning:
                     machine_counts.get(machine_id, 0) + 1
                 )
 
+            machines = data.get("machines", [])
+            if isinstance(machines, list):
+                for machine in machines:
+                    if not isinstance(machine, dict):
+                        continue
+
+                    nested_machine_id = machine.get("id")
+                    if nested_machine_id:
+                        machine_counts[nested_machine_id] = (
+                            machine_counts.get(nested_machine_id, 0) + 1
+                        )
+
+                    nested_status = machine.get("status")
+                    if nested_status:
+                        status_counts[nested_status] = (
+                            status_counts.get(nested_status, 0) + 1
+                        )
+
             status = data.get("status")
             if status:
                 status_counts[status] = (
