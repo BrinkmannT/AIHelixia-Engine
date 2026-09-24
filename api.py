@@ -169,51 +169,12 @@ def process_factory(
                 detail="Engine ist nicht gestartet.",
             )
 
-        ingest_result = engine.ingest_factory_data(
-            factory_data
-        )
-
-        world_state = engine.world_state.get_state()
-
-        process_input = {
-            "factory": world_state.get("factory", {}),
-            "production_lines": world_state.get(
-                "production_lines",
-                [],
-            ),
-            "machines": world_state.get(
-                "machines",
-                [],
-            ),
-            "sensors": world_state.get(
-                "sensors",
-                [],
-            ),
-            "production": world_state.get(
-                "production",
-                {},
-            ),
-            "energy": world_state.get(
-                "energy",
-                {},
-            ),
-            "maintenance": world_state.get(
-                "maintenance",
-                {},
-            ),
-            "alarms": world_state.get(
-                "alarms",
-                [],
-            ),
-        }
-
         process_result = engine.process(
-            process_input
+            factory_data
         )
 
         return {
             "status": "processed",
-            "ingest": ingest_result,
             "process": process_result,
         }
 

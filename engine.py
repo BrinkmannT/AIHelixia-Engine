@@ -378,3 +378,11 @@ class AIHelixiaEngine:
             "evaluation": evaluation_result,
             "feedback": feedback_result,
         }
+
+    def get_status(self) -> dict[str, object]:
+        return {
+            "name": self.name,
+            "version": self.VERSION,
+            "status": self.status,
+            "components": self.components,
+        }
