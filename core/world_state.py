@@ -1,11 +1,12 @@
 """
 AIHelixia Intelligence Engine
 World State
-Version: 0.7.0
+Version: 0.8.0
 """
 
 from __future__ import annotations
 
+from copy import deepcopy
 from datetime import datetime, timezone
 from typing import Any
 
@@ -14,14 +15,17 @@ class WorldState:
     """
     Verwaltet den aktuellen internen Zustand der Engine.
 
-    V0.7.0:
+    V0.8.0:
     - deterministische Zustandsverwaltung
     - keine LLM-Abhängigkeit
     - Upsert-Verhalten für industrielle Komponenten
     - keine Duplikate bei wiederholtem Factory-Ingest
+    - sichere State-Snapshots
+    - gezielte Objektabfragen
+    - gezieltes Entfernen industrieller Objekte
     """
 
-    VERSION = "0.7.0"
+    VERSION = "0.8.0"
 
     def __init__(self) -> None:
         self.status = "created"
@@ -62,13 +66,13 @@ class WorldState:
         observation = {
             "id": len(self.observations) + 1,
             "timestamp": self._current_timestamp(),
-            "data": perception,
+            "data": deepcopy(perception),
         }
 
         self.observations.append(observation)
         self._update_timestamp()
 
-        return observation
+        return deepcopy(observation)
 
     def add_entity(
         self,
@@ -80,10 +84,12 @@ class WorldState:
         if not isinstance(entity, dict):
             raise TypeError("Entity muss ein Dictionary sein.")
 
-        self.entities.append(entity)
+        entity_copy = deepcopy(entity)
+
+        self.entities.append(entity_copy)
         self._update_timestamp()
 
-        return entity
+        return deepcopy(entity_copy)
 
     def add_condition(
         self,
@@ -95,10 +101,12 @@ class WorldState:
         if not isinstance(condition, dict):
             raise TypeError("Condition muss ein Dictionary sein.")
 
-        self.conditions.append(condition)
+        condition_copy = deepcopy(condition)
+
+        self.conditions.append(condition_copy)
         self._update_timestamp()
 
-        return condition
+        return deepcopy(condition_copy)
 
     def set_factory(
         self,
@@ -110,10 +118,10 @@ class WorldState:
         if not isinstance(factory, dict):
             raise TypeError("Factory muss ein Dictionary sein.")
 
-        self.factory = factory
+        self.factory = deepcopy(factory)
         self._update_timestamp()
 
-        return factory
+        return deepcopy(self.factory)
 
     def add_production_line(
         self,
@@ -127,14 +135,16 @@ class WorldState:
                 "Production Line muss ein Dictionary sein."
             )
 
+        production_line_copy = deepcopy(production_line)
+
         self._upsert_by_id(
             self.production_lines,
-            production_line,
+            production_line_copy,
         )
 
         self._update_timestamp()
 
-        return production_line
+        return deepcopy(production_line_copy)
 
     def add_machine(
         self,
@@ -146,14 +156,16 @@ class WorldState:
         if not isinstance(machine, dict):
             raise TypeError("Machine muss ein Dictionary sein.")
 
+        machine_copy = deepcopy(machine)
+
         self._upsert_by_id(
             self.machines,
-            machine,
+            machine_copy,
         )
 
         self._update_timestamp()
 
-        return machine
+        return deepcopy(machine_copy)
 
     def add_sensor(
         self,
@@ -165,14 +177,16 @@ class WorldState:
         if not isinstance(sensor, dict):
             raise TypeError("Sensor muss ein Dictionary sein.")
 
+        sensor_copy = deepcopy(sensor)
+
         self._upsert_by_id(
             self.sensors,
-            sensor,
+            sensor_copy,
         )
 
         self._update_timestamp()
 
-        return sensor
+        return deepcopy(sensor_copy)
 
     def set_production(
         self,
@@ -184,10 +198,10 @@ class WorldState:
         if not isinstance(production, dict):
             raise TypeError("Production muss ein Dictionary sein.")
 
-        self.production = production
+        self.production = deepcopy(production)
         self._update_timestamp()
 
-        return production
+        return deepcopy(self.production)
 
     def set_energy(
         self,
@@ -199,10 +213,10 @@ class WorldState:
         if not isinstance(energy, dict):
             raise TypeError("Energy muss ein Dictionary sein.")
 
-        self.energy = energy
+        self.energy = deepcopy(energy)
         self._update_timestamp()
 
-        return energy
+        return deepcopy(self.energy)
 
     def set_maintenance(
         self,
@@ -214,10 +228,10 @@ class WorldState:
         if not isinstance(maintenance, dict):
             raise TypeError("Maintenance muss ein Dictionary sein.")
 
-        self.maintenance = maintenance
+        self.maintenance = deepcopy(maintenance)
         self._update_timestamp()
 
-        return maintenance
+        return deepcopy(self.maintenance)
 
     def add_alarm(
         self,
@@ -229,32 +243,135 @@ class WorldState:
         if not isinstance(alarm, dict):
             raise TypeError("Alarm muss ein Dictionary sein.")
 
+        alarm_copy = deepcopy(alarm)
+
         self._upsert_by_id(
             self.alarms,
-            alarm,
+            alarm_copy,
         )
 
         self._update_timestamp()
 
-        return alarm
+        return deepcopy(alarm_copy)
 
     def get_state(self) -> dict[str, Any]:
+        """
+        Liefert einen sicheren Snapshot des aktuellen World State.
 
-        return {
-            "status": self.status,
-            "factory": self.factory,
-            "production_lines": self.production_lines,
-            "machines": self.machines,
-            "sensors": self.sensors,
-            "production": self.production,
-            "energy": self.energy,
-            "maintenance": self.maintenance,
-            "alarms": self.alarms,
-            "observations": self.observations,
-            "entities": self.entities,
-            "conditions": self.conditions,
-            "updated_at": self.updated_at,
-        }
+        Der zurückgegebene Zustand enthält keine direkten Referenzen
+        auf die internen Datenstrukturen.
+        """
+
+        return deepcopy(
+            {
+                "status": self.status,
+                "factory": self.factory,
+                "production_lines": self.production_lines,
+                "machines": self.machines,
+                "sensors": self.sensors,
+                "production": self.production,
+                "energy": self.energy,
+                "maintenance": self.maintenance,
+                "alarms": self.alarms,
+                "observations": self.observations,
+                "entities": self.entities,
+                "conditions": self.conditions,
+                "updated_at": self.updated_at,
+            }
+        )
+
+    def get_snapshot(self) -> dict[str, Any]:
+        """
+        Explizite Snapshot-API für andere Engine-Komponenten.
+        """
+
+        return self.get_state()
+
+    def get_factory(self) -> dict[str, Any] | None:
+        return self._find_by_id(
+            self.factory,
+            None,
+        )
+
+    def get_production_line(
+        self,
+        production_line_id: str,
+    ) -> dict[str, Any] | None:
+
+        return self._find_by_id(
+            self.production_lines,
+            production_line_id,
+        )
+
+    def get_machine(
+        self,
+        machine_id: str,
+    ) -> dict[str, Any] | None:
+
+        return self._find_by_id(
+            self.machines,
+            machine_id,
+        )
+
+    def get_sensor(
+        self,
+        sensor_id: str,
+    ) -> dict[str, Any] | None:
+
+        return self._find_by_id(
+            self.sensors,
+            sensor_id,
+        )
+
+    def get_alarm(
+        self,
+        alarm_id: str,
+    ) -> dict[str, Any] | None:
+
+        return self._find_by_id(
+            self.alarms,
+            alarm_id,
+        )
+
+    def remove_production_line(
+        self,
+        production_line_id: str,
+    ) -> bool:
+
+        return self._remove_by_id(
+            self.production_lines,
+            production_line_id,
+        )
+
+    def remove_machine(
+        self,
+        machine_id: str,
+    ) -> bool:
+
+        return self._remove_by_id(
+            self.machines,
+            machine_id,
+        )
+
+    def remove_sensor(
+        self,
+        sensor_id: str,
+    ) -> bool:
+
+        return self._remove_by_id(
+            self.sensors,
+            sensor_id,
+        )
+
+    def remove_alarm(
+        self,
+        alarm_id: str,
+    ) -> bool:
+
+        return self._remove_by_id(
+            self.alarms,
+            alarm_id,
+        )
 
     def clear(self) -> None:
 
@@ -311,6 +428,43 @@ class WorldState:
                 return
 
         collection.append(item)
+
+    @staticmethod
+    def _find_by_id(
+        collection: dict[str, Any] | list[dict[str, Any]],
+        item_id: str | None,
+    ) -> dict[str, Any] | None:
+
+        if isinstance(collection, dict):
+            if item_id is None:
+                return deepcopy(collection) if collection else None
+
+            if collection.get("id") == item_id:
+                return deepcopy(collection)
+
+            return None
+
+        for item in collection:
+            if item.get("id") == item_id:
+                return deepcopy(item)
+
+        return None
+
+    def _remove_by_id(
+        self,
+        collection: list[dict[str, Any]],
+        item_id: str,
+    ) -> bool:
+
+        self._require_running()
+
+        for index, item in enumerate(collection):
+            if item.get("id") == item_id:
+                collection.pop(index)
+                self._update_timestamp()
+                return True
+
+        return False
 
     def _require_running(self) -> None:
 
