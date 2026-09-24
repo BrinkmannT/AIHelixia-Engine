@@ -203,25 +203,44 @@ class AIHelixiaEngine:
                 "AIHelixia Engine ist nicht gestartet."
             )
 
-        # 1. Perception
+        # 1. Factory Input Detection
+        is_factory_input = (
+            isinstance(input_data, dict)
+            and "factory" in input_data
+            and "machines" in input_data
+            and "sensors" in input_data
+            and "alarms" in input_data
+        )
+
+        factory_ingest_result = None
+
+        if is_factory_input:
+            factory_ingest_result = self.ingest_factory_data(
+                input_data
+            )
+
+        # 2. Perception
         perception_result = self.perception.perceive(
             input_data,
         )
 
-        # 2. World State
-        observation = perception_result.get(
-            "observation",
-            input_data,
-        )
-
-        if isinstance(observation, dict):
-            self.world_state.add_observation(
-                observation,
+        # 3. World State
+        if is_factory_input:
+            world_state = self.world_state.get_state()
+        else:
+            observation = perception_result.get(
+                "observation",
+                input_data,
             )
 
-        world_state = self.world_state.get_state()
+            if isinstance(observation, dict):
+                self.world_state.add_observation(
+                    observation,
+                )
 
-        # 3. Persistence
+            world_state = self.world_state.get_state()
+
+        # 4. Persistence
         self.persistence.save_factory_state(
             world_state,
         )
@@ -231,58 +250,68 @@ class AIHelixiaEngine:
             {
                 "input": input_data,
                 "perception": perception_result,
+                "factory_ingest": factory_ingest_result,
             },
         )
 
-        # 4. Memory
-        if isinstance(observation, dict):
-            self.memory.store(
+        # 5. Memory
+        if is_factory_input:
+            memory_type = "factory_state"
+            memory_data = world_state
+        else:
+            memory_type = "observation"
+            memory_data = perception_result.get(
                 "observation",
-                observation,
+                input_data,
             )
+
+        self.memory.store(
+            memory_type,
+            memory_data,
+        )
 
         memory_result = self.memory.retrieve()
 
-        # 5. Reasoning
+        # 6. Reasoning
         reasoning_result = self.reasoning.analyze(
-            self.world_state.get_state(),
+            world_state,
             memory_result,
         )
 
-        # 6. Prediction
+        # 7. Prediction
         prediction_result = self.prediction.predict(
-            self.world_state.get_state(),
+            world_state,
             reasoning_result,
         )
 
-        # 7. Decision
+        # 8. Decision
         decision_result = self.decision.decide(
             reasoning_result,
             prediction_result,
         )
 
-        # 8. Memory
+        # 9. Memory
         self.memory.store(
             "decision",
             decision_result,
         )
 
-        # 9. Action
+        # 10. Action
         action_result = self.action.execute(
             decision_result,
         )
 
-        # 10. Evaluation
+        # 11. Evaluation
         evaluation_result = self.evaluation.evaluate(
             action_result=action_result,
         )
 
-        # 11. Feedback
+        # 12. Feedback
         feedback_result = self.feedback.process(
             evaluation_result,
         )
 
-        # 12. Memory
+        # 13. Memory
         self.memory.store(
             "evaluation",
             evaluation_result,
@@ -293,7 +322,7 @@ class AIHelixiaEngine:
             feedback_result,
         )
 
-        # 13. Persistence
+        # 14. Persistence
         self.persistence.save_ai_result(
             "reasoning",
             reasoning_result,
@@ -338,8 +367,9 @@ class AIHelixiaEngine:
 
         return {
             "status": "completed",
+            "factory_ingest": factory_ingest_result,
             "perception": perception_result,
-            "world_state": self.world_state.get_state(),
+            "world_state": world_state,
             "memory": memory_result,
             "reasoning": reasoning_result,
             "prediction": prediction_result,
@@ -347,29 +377,4 @@ class AIHelixiaEngine:
             "action": action_result,
             "evaluation": evaluation_result,
             "feedback": feedback_result,
-        }
-
-    def get_status(self) -> dict[str, Any]:
-        return {
-            "name": self.name,
-            "version": self.VERSION,
-            "status": self.status,
-            "core": {
-                "status": self.status,
-                "components": self.components,
-                "component_count": len(self.components),
-            },
-            "model": self.model_provider.model_name,
-            "device": self.model_provider.device,
-            "model_status": self.model_provider.status,
-            "factory_input": self.factory_input.get_status(),
-            "world_state": self.world_state.get_status(),
-            "persistence": self.persistence.get_status(),
-            "memory": self.memory.get_status(),
-            "reasoning": self.reasoning.get_status(),
-            "prediction": self.prediction.get_status(),
-            "decision": self.decision.get_status(),
-            "action": self.action.get_status(),
-            "evaluation": self.evaluation.get_status(),
-            "feedback": self.feedback.get_status(),
         }
