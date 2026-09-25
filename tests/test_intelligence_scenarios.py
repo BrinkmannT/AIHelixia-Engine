@@ -1,15 +1,17 @@
 """
 AIHelixia Intelligence Engine
-Intelligence Scenario Test V0.1
+Intelligence Scenario Test V0.3
 """
 
 from __future__ import annotations
+
+import tempfile
+from pathlib import Path
 
 from engine import AIHelixiaEngine
 
 
 def build_input(scenario: str) -> dict:
-
     base = {
         "factory": {
             "id": f"FACTORY-{scenario.upper()}",
@@ -52,7 +54,6 @@ def build_input(scenario: str) -> dict:
     }
 
     if scenario == "normal":
-
         base["sensors"] = [
             {
                 "id": "SENSOR-TEMP-001",
@@ -71,7 +72,6 @@ def build_input(scenario: str) -> dict:
         ]
 
     elif scenario == "light_anomaly":
-
         base["sensors"] = [
             {
                 "id": "SENSOR-TEMP-001",
@@ -90,7 +90,6 @@ def build_input(scenario: str) -> dict:
         ]
 
     elif scenario == "thermal_mechanical":
-
         base["sensors"] = [
             {
                 "id": "SENSOR-TEMP-001",
@@ -109,7 +108,6 @@ def build_input(scenario: str) -> dict:
         ]
 
     elif scenario == "critical_multi_signal":
-
         base["sensors"] = [
             {
                 "id": "SENSOR-TEMP-001",
@@ -140,7 +138,6 @@ def build_input(scenario: str) -> dict:
         }
 
     elif scenario == "critical_alarm":
-
         base["sensors"] = [
             {
                 "id": "SENSOR-TEMP-001",
@@ -179,62 +176,100 @@ SCENARIOS = [
 ]
 
 
+def run_scenario(scenario: str) -> dict:
+    """
+    Führt das Szenario mit einer eigenen temporären
+    Persistence-Datenbank aus.
+
+    Dadurch bleiben die Szenarien vollständig isoliert.
+    """
+
+    with tempfile.TemporaryDirectory(
+        prefix=f"aihelixia_{scenario}_"
+    ) as temp_dir:
+
+        database_path = str(
+            Path(temp_dir) / "scenario.db"
+        )
+
+        engine = AIHelixiaEngine(
+            database_path=database_path
+        )
+
+        try:
+            engine.start()
+
+            result = engine.process(
+                build_input(scenario)
+            )
+
+            anomaly = result["reasoning"].get(
+                "anomaly_analysis",
+                {},
+            )
+
+            root_cause = result["root_cause"]
+            decision = result["decision"]
+            evaluation = result["evaluation"]
+            feedback = result["feedback"]
+
+            primary = root_cause.get(
+                "primary_hypothesis"
+            )
+
+            primary_type = (
+                primary.get("type")
+                if isinstance(primary, dict)
+                else None
+            )
+
+            primary_priority = (
+                primary.get("priority")
+                if isinstance(primary, dict)
+                else None
+            )
+
+            return {
+                "scenario": scenario,
+                "anomaly": anomaly.get("status"),
+                "severity": anomaly.get("severity"),
+                "root_cause": primary_type,
+                "priority": primary_priority,
+                "decision": decision.get(
+                    "decision_type"
+                ),
+                "action": decision.get(
+                    "action"
+                ),
+                "evaluation": evaluation.get(
+                    "evaluation"
+                ),
+                "outcome_known": evaluation.get(
+                    "outcome_known"
+                ),
+                "feedback": feedback.get(
+                    "feedback_type"
+                ),
+                "signal": feedback.get(
+                    "signal"
+                ),
+            }
+
+        finally:
+            engine.stop()
+
+
 def main() -> None:
-
-    engine = AIHelixiaEngine()
-    engine.start()
-
     print()
     print("========================================")
     print(" AIHELIXIA INTELLIGENCE SCENARIO TEST")
+    print(" V0.3 - ISOLATED PERSISTENCE")
     print("========================================")
 
     results = []
 
     for scenario in SCENARIOS:
-
-        result = engine.process(
-            build_input(scenario)
-        )
-
-        anomaly = result["reasoning"].get(
-            "anomaly_analysis",
-            {},
-        )
-
-        root_cause = result["root_cause"]
-        decision = result["decision"]
-
-        primary = root_cause.get(
-            "primary_hypothesis"
-        )
-
-        primary_type = (
-            primary.get("type")
-            if isinstance(primary, dict)
-            else None
-        )
-
-        primary_priority = (
-            primary.get("priority")
-            if isinstance(primary, dict)
-            else None
-        )
-
-        row = {
-            "scenario": scenario,
-            "anomaly": anomaly.get("status"),
-            "severity": anomaly.get("severity"),
-            "root_cause": primary_type,
-            "priority": primary_priority,
-            "decision": decision.get(
-                "decision_type"
-            ),
-            "action": decision.get(
-                "action"
-            ),
-        }
-
+        row = run_scenario(scenario)
         results.append(row)
 
         print()
@@ -247,23 +282,25 @@ def main() -> None:
         print("Priority:", row["priority"])
         print("Decision:", row["decision"])
         print("Action:", row["action"])
-
-    engine.stop()
+        print("Evaluation:", row["evaluation"])
+        print("Outcome Known:", row["outcome_known"])
+        print("Feedback:", row["feedback"])
+        print("Signal:", row["signal"])
 
     print()
     print("========================================")
     print(" SCENARIO SUMMARY")
     print("========================================")
-
     print()
 
     for row in results:
         print(
             f"{row['scenario']:22} | "
             f"{str(row['anomaly']):18} | "
-            f"{str(row['priority']):8} | "
+            f"{str(row['root_cause']):34} | "
             f"{str(row['decision']):20} | "
-            f"{str(row['action'])}"
+            f"{str(row['evaluation']):35} | "
+            f"{str(row['signal'])}"
         )
 
     print()

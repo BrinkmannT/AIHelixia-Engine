@@ -1,7 +1,7 @@
 """
 AIHelixia Intelligence Engine
 Evaluation Layer
-Version: 0.2.0
+Version: 0.3.0
 """
 
 from __future__ import annotations
@@ -11,19 +11,23 @@ from typing import Any
 
 class Evaluation:
     """
-    Bewertet die Ausführung einer Action.
+    Bewertet Action-Ausführung und beobachtbaren Outcome.
 
     Verantwortlichkeiten:
-    - Action-Ergebnis prüfen
-    - Erfolg oder Fehler feststellen
+    - technische Action-Ausführung prüfen
+    - beobachtbaren Outcome unterscheiden
+    - Execution Success nicht mit Outcome Success verwechseln
     - strukturierte Bewertung erzeugen
-    - Grundlage für späteres Feedback schaffen
+    - Grundlage für Feedback und Learning Signal schaffen
 
-    V0.2.0:
+    V0.3.0:
     - deterministisch
     - reproduzierbar
     - keine LLM-Abhängigkeit
+    - trennt Execution Status und Outcome Status
     """
+
+    VERSION = "0.3.0"
 
     def __init__(self) -> None:
         self.status = "created"
@@ -45,6 +49,18 @@ class Evaluation:
     ) -> dict[str, Any]:
         """
         Bewertet das Ergebnis einer ausgeführten Action.
+
+        Wichtig:
+        Eine erfolgreich ausgeführte Action bedeutet nicht automatisch,
+        dass das industrielle Problem gelöst wurde.
+
+        Deshalb werden zwei Ebenen getrennt:
+
+        1. execution
+           Wurde die Action technisch ausgeführt?
+
+        2. outcome
+           Ist ein tatsächlicher Outcome bekannt und erfolgreich?
         """
 
         if self.status != "running":
@@ -65,47 +81,128 @@ class Evaluation:
             "unknown",
         )
 
-        result = action_result.get(
+        action_payload = action_result.get(
             "result",
             {},
         )
 
-        success = result.get(
+        if not isinstance(action_payload, dict):
+            action_payload = {}
+
+        execution_success = action_payload.get(
             "success",
             False,
         )
 
+        outcome = action_result.get(
+            "outcome",
+        )
+
+        outcome_status = "unknown"
+        outcome_success: bool | None = None
+
+        if isinstance(outcome, dict):
+            outcome_status = outcome.get(
+                "status",
+                "unknown",
+            )
+
+            if "success" in outcome:
+                outcome_success = outcome.get(
+                    "success",
+                )
+
+        elif outcome is not None:
+            outcome_status = str(outcome)
+
+        # ---------------------------------------------------------
+        # 1. Technische Ausführung bewerten
+        # ---------------------------------------------------------
+
         if execution_status != "executed":
+            execution_evaluation = "failed"
+            execution_score = 0.0
+
+        elif execution_success is True:
+            execution_evaluation = "successful"
+            execution_score = 1.0
+
+        else:
+            execution_evaluation = "unsuccessful"
+            execution_score = 0.0
+
+        # ---------------------------------------------------------
+        # 2. Tatsächlichen Outcome bewerten
+        # ---------------------------------------------------------
+
+        if outcome_success is True:
+            outcome_evaluation = "successful"
+            outcome_score = 1.0
+
+        elif outcome_success is False:
+            outcome_evaluation = "unsuccessful"
+            outcome_score = 0.0
+
+        else:
+            outcome_evaluation = "unknown"
+            outcome_score = None
+
+        # ---------------------------------------------------------
+        # 3. Gesamtevaluation
+        # ---------------------------------------------------------
+
+        if execution_evaluation == "failed":
             evaluation = "failed"
             score = 0.0
             message = (
-                "Die Action wurde nicht erfolgreich "
+                "Die Action wurde technisch nicht erfolgreich "
                 "ausgeführt."
             )
 
-        elif success is True:
+        elif outcome_evaluation == "successful":
             evaluation = "successful"
-            score = 1.0
+            score = outcome_score
             message = (
-                "Die Action wurde erfolgreich "
-                "ausgeführt."
+                "Die Action wurde erfolgreich ausgeführt "
+                "und der beobachtete Outcome war erfolgreich."
+            )
+
+        elif outcome_evaluation == "unsuccessful":
+            evaluation = "unsuccessful"
+            score = outcome_score
+            message = (
+                "Die Action wurde technisch ausgeführt, "
+                "aber der beobachtete Outcome war nicht erfolgreich."
             )
 
         else:
-            evaluation = "unsuccessful"
-            score = 0.0
+            evaluation = "execution_success_outcome_unknown"
+            score = execution_score
             message = (
-                "Die Action wurde ausgeführt, "
-                "aber das Ergebnis war nicht erfolgreich."
+                "Die Action wurde technisch erfolgreich ausgeführt, "
+                "aber ein tatsächlicher Outcome ist noch nicht bekannt."
             )
 
         return {
             "status": "evaluated",
+            "version": self.VERSION,
             "evaluation_id": self.evaluation_count,
+
+            # Gesamtbewertung
             "evaluation": evaluation,
             "score": score,
             "message": message,
+
+            # Technische Ausführung
             "action_status": execution_status,
+            "execution_evaluation": execution_evaluation,
+            "execution_score": execution_score,
+
+            # Tatsächlicher Outcome
+            "outcome_status": outcome_status,
+            "outcome_evaluation": outcome_evaluation,
+            "outcome_score": outcome_score,
+            "outcome_known": outcome_success is not None,
         }
 
     def get_status(self) -> dict[str, Any]:
@@ -113,6 +210,7 @@ class Evaluation:
 
         return {
             "component": "evaluation",
+            "version": self.VERSION,
             "status": self.status,
             "evaluation_count": self.evaluation_count,
         }
