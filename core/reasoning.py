@@ -1,7 +1,7 @@
 """
 AIHelixia Intelligence Engine
 Reasoning Layer
-Version: 0.7.0
+Version: 0.8.0
 """
 
 from __future__ import annotations
@@ -10,7 +10,7 @@ from typing import Any
 
 
 class Reasoning:
-    VERSION = "0.7.0"
+    VERSION = "0.8.0"
 
     def __init__(self):
         self.status = "created"
@@ -42,13 +42,31 @@ class Reasoning:
 
         industrial_fields = {
             "factory": world_state.get("factory"),
-            "production_lines": world_state.get("production_lines", []),
-            "machines": world_state.get("machines", []),
-            "sensors": world_state.get("sensors", []),
-            "production": world_state.get("production"),
-            "energy": world_state.get("energy"),
-            "maintenance": world_state.get("maintenance"),
-            "alarms": world_state.get("alarms", []),
+            "production_lines": world_state.get(
+                "production_lines",
+                [],
+            ),
+            "machines": world_state.get(
+                "machines",
+                [],
+            ),
+            "sensors": world_state.get(
+                "sensors",
+                [],
+            ),
+            "production": world_state.get(
+                "production"
+            ),
+            "energy": world_state.get(
+                "energy"
+            ),
+            "maintenance": world_state.get(
+                "maintenance"
+            ),
+            "alarms": world_state.get(
+                "alarms",
+                [],
+            ),
         }
 
         state_assessment = self._assess_state(
@@ -58,10 +76,20 @@ class Reasoning:
             industrial_fields,
         )
 
-        memory_analysis = self._analyze_memory(memory_entries)
-
-        historical_memory_analysis = self._analyze_historical_memory(
+        memory_analysis = self._analyze_memory(
             memory_entries
+        )
+
+        historical_memory_analysis = (
+            self._analyze_historical_memory(
+                memory_entries
+            )
+        )
+
+        historical_outcome_analysis = (
+            self._analyze_historical_outcomes(
+                memory_entries
+            )
         )
 
         feedback_analysis = self._analyze_feedback(
@@ -71,10 +99,13 @@ class Reasoning:
         learning_signal = self._build_learning_signal(
             feedback_analysis,
             historical_memory_analysis,
+            historical_outcome_analysis,
         )
 
-        industrial_analysis = self._analyze_industrial_state(
-            industrial_fields
+        industrial_analysis = (
+            self._analyze_industrial_state(
+                industrial_fields
+            )
         )
 
         anomaly_analysis = self._analyze_anomalies(
@@ -85,6 +116,7 @@ class Reasoning:
             state_assessment,
             memory_analysis,
             historical_memory_analysis,
+            historical_outcome_analysis,
             feedback_analysis,
             learning_signal,
             industrial_analysis,
@@ -99,7 +131,12 @@ class Reasoning:
             "analysis_id": self.analysis_count,
             "state_assessment": state_assessment,
             "memory_analysis": memory_analysis,
-            "historical_memory_analysis": historical_memory_analysis,
+            "historical_memory_analysis": (
+                historical_memory_analysis
+            ),
+            "historical_outcome_analysis": (
+                historical_outcome_analysis
+            ),
             "feedback_analysis": feedback_analysis,
             "learning_signal": learning_signal,
             "industrial_analysis": industrial_analysis,
@@ -119,61 +156,54 @@ class Reasoning:
         industrial_fields: dict[str, Any],
     ) -> dict[str, Any]:
 
-        assessment: dict[str, Any] = {}
+        observation_count = (
+            len(observations)
+            if isinstance(observations, list)
+            else 0
+        )
 
-        assessment["observations"] = {
-            "status": (
-                "observations_available"
-                if observations
-                else "no_observations"
-            ),
-            "count": len(observations),
-        }
+        entity_count = (
+            len(entities)
+            if isinstance(entities, list)
+            else 0
+        )
 
-        assessment["entities"] = {
-            "status": (
-                "entities_available"
-                if entities
-                else "no_entities"
-            ),
-            "count": len(entities),
-        }
+        condition_count = (
+            len(conditions)
+            if isinstance(conditions, list)
+            else 0
+        )
 
-        assessment["conditions"] = {
-            "status": (
-                "conditions_available"
-                if conditions
-                else "no_conditions"
-            ),
-            "count": len(conditions),
-        }
+        industrial_data_available = any([
+            industrial_fields.get("factory") is not None,
+            bool(industrial_fields.get("production_lines")),
+            bool(industrial_fields.get("machines")),
+            bool(industrial_fields.get("sensors")),
+            industrial_fields.get("production") is not None,
+            industrial_fields.get("energy") is not None,
+            industrial_fields.get("maintenance") is not None,
+            bool(industrial_fields.get("alarms")),
+        ])
 
-        if industrial_fields["alarms"]:
-            assessment["industrial_alarms"] = {
-                "status": "industrial_alarm_state",
-                "count": len(industrial_fields["alarms"]),
-            }
-
-        if industrial_fields["machines"]:
-            assessment["industrial_machines"] = {
-                "status": "industrial_machine_state",
-                "count": len(industrial_fields["machines"]),
-            }
-
-        if industrial_fields["production"] is not None:
-            assessment["industrial_production"] = {
-                "status": "industrial_production_state"
-            }
-
-        if any(
-            value not in (None, [], {})
-            for value in industrial_fields.values()
+        if (
+            observation_count == 0
+            and entity_count == 0
+            and condition_count == 0
+            and not industrial_data_available
         ):
-            assessment["industrial_state"] = {
-                "status": "industrial_state_available"
-            }
+            status = "no_state_data"
+        else:
+            status = "state_available"
 
-        return assessment
+        return {
+            "status": status,
+            "observation_count": observation_count,
+            "entity_count": entity_count,
+            "condition_count": condition_count,
+            "industrial_data_available": (
+                industrial_data_available
+            ),
+        }
 
     def _analyze_memory(
         self,
@@ -183,27 +213,22 @@ class Reasoning:
         if not memory_entries:
             return {
                 "status": "no_memory",
-                "entry_count": 0,
-                "types": {},
+                "count": 0,
+                "types": [],
             }
 
-        type_counts: dict[str, int] = {}
-
-        for entry in memory_entries:
-
-            if not isinstance(entry, dict):
-                continue
-
-            memory_type = entry.get("type", "unknown")
-
-            type_counts[memory_type] = (
-                type_counts.get(memory_type, 0) + 1
-            )
+        types = sorted({
+            entry.get("type")
+            for entry in memory_entries
+            if isinstance(entry, dict)
+            and entry.get("type")
+        })
 
         return {
             "status": "memory_available",
+            "count": len(memory_entries),
             "entry_count": len(memory_entries),
-            "types": type_counts,
+            "types": types,
         }
 
     def _analyze_historical_memory(
@@ -232,11 +257,12 @@ class Reasoning:
             if not isinstance(entry, dict):
                 continue
 
-            memory_type = entry.get("type", "unknown")
+            memory_type = entry.get("type")
 
-            type_counts[memory_type] = (
-                type_counts.get(memory_type, 0) + 1
-            )
+            if memory_type:
+                type_counts[memory_type] = (
+                    type_counts.get(memory_type, 0) + 1
+                )
 
             data = entry.get("data", {})
 
@@ -259,31 +285,37 @@ class Reasoning:
                     if not isinstance(machine, dict):
                         continue
 
-                    nested_machine_id = machine.get("id")
+                    machine_id = machine.get("id")
 
-                    if nested_machine_id:
-                        machine_counts[nested_machine_id] = (
+                    if machine_id:
+                        machine_counts[machine_id] = (
                             machine_counts.get(
-                                nested_machine_id,
+                                machine_id,
                                 0,
-                            ) + 1
+                            )
+                            + 1
                         )
 
-                    nested_status = machine.get("status")
+                    machine_status = machine.get(
+                        "status"
+                    )
 
-                    if nested_status:
-                        status_counts[nested_status] = (
+                    if machine_status:
+                        status_counts[
+                            machine_status
+                        ] = (
                             status_counts.get(
-                                nested_status,
+                                machine_status,
                                 0,
-                            ) + 1
+                            )
+                            + 1
                         )
 
-            status = data.get("status")
+            entry_status = data.get("status")
 
-            if status:
-                status_counts[status] = (
-                    status_counts.get(status, 0) + 1
+            if entry_status:
+                status_counts[entry_status] = (
+                    status_counts.get(entry_status, 0) + 1
                 )
 
             action = data.get("action")
@@ -295,7 +327,8 @@ class Reasoning:
 
         recurring_machine_ids = sorted(
             machine_id
-            for machine_id, count in machine_counts.items()
+            for machine_id, count
+            in machine_counts.items()
             if count > 1
         )
 
@@ -306,7 +339,191 @@ class Reasoning:
             "machine_counts": machine_counts,
             "status_counts": status_counts,
             "action_counts": action_counts,
-            "recurring_machine_ids": recurring_machine_ids,
+            "recurring_machine_ids": (
+                recurring_machine_ids
+            ),
+        }
+
+    def _analyze_historical_outcomes(
+        self,
+        memory_entries: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+
+        outcome_entries = [
+            entry
+            for entry in memory_entries
+            if isinstance(entry, dict)
+            and entry.get("type") == "outcome_learning"
+        ]
+
+        if not outcome_entries:
+            return {
+                "status": "no_historical_outcomes",
+                "count": 0,
+                "improved_count": 0,
+                "degraded_count": 0,
+                "unchanged_count": 0,
+                "unknown_count": 0,
+                "successful_count": 0,
+                "unsuccessful_count": 0,
+                "review_count": 0,
+                "known_outcome_count": 0,
+                "success_rate": None,
+                "average_confidence": None,
+                "average_evaluation_score": None,
+                "dominant_outcome": None,
+            }
+
+        improved_count = 0
+        degraded_count = 0
+        unchanged_count = 0
+        unknown_count = 0
+
+        successful_count = 0
+        unsuccessful_count = 0
+        review_count = 0
+
+        confidences: list[float] = []
+        evaluation_scores: list[float] = []
+
+        for entry in outcome_entries:
+
+            data = entry.get("data", {})
+
+            if not isinstance(data, dict):
+                data = {}
+
+            outcome = data.get("outcome")
+
+            if outcome == "improved":
+                improved_count += 1
+            elif outcome == "degraded":
+                degraded_count += 1
+            elif outcome == "unchanged":
+                unchanged_count += 1
+            else:
+                unknown_count += 1
+
+            outcome_success = data.get(
+                "outcome_success"
+            )
+
+            if outcome_success is True:
+                successful_count += 1
+            elif outcome_success is False:
+                unsuccessful_count += 1
+
+            learning_signal = data.get(
+                "learning_signal"
+            )
+
+            if learning_signal == "review":
+                review_count += 1
+
+            confidence = data.get(
+                "outcome_confidence"
+            )
+
+            if isinstance(confidence, (int, float)):
+                confidences.append(
+                    float(confidence)
+                )
+
+            evaluation_score = data.get(
+                "evaluation_score"
+            )
+
+            if isinstance(
+                evaluation_score,
+                (int, float),
+            ):
+                evaluation_scores.append(
+                    float(evaluation_score)
+                )
+
+        known_outcome_count = (
+            improved_count
+            + degraded_count
+            + unchanged_count
+        )
+
+        success_rate = None
+
+        if known_outcome_count > 0:
+            success_rate = (
+                improved_count
+                / known_outcome_count
+            )
+
+        average_confidence = (
+            sum(confidences) / len(confidences)
+            if confidences
+            else None
+        )
+
+        average_evaluation_score = (
+            sum(evaluation_scores)
+            / len(evaluation_scores)
+            if evaluation_scores
+            else None
+        )
+
+        if known_outcome_count == 0:
+            dominant_outcome = None
+        else:
+            outcome_counts = {
+                "improved": improved_count,
+                "degraded": degraded_count,
+                "unchanged": unchanged_count,
+            }
+
+            dominant_outcome = max(
+                outcome_counts,
+                key=outcome_counts.get,
+            )
+
+        if (
+            degraded_count > improved_count
+            and degraded_count > unchanged_count
+        ):
+            status = "degraded_history"
+        elif (
+            improved_count > degraded_count
+            and improved_count > unchanged_count
+        ):
+            status = "positive_history"
+        elif known_outcome_count > 0:
+            status = "mixed_history"
+        else:
+            status = "unknown_history"
+
+        return {
+            "status": status,
+            "count": len(outcome_entries),
+            "improved_count": improved_count,
+            "degraded_count": degraded_count,
+            "unchanged_count": unchanged_count,
+            "unknown_count": unknown_count,
+            "successful_count": successful_count,
+            "unsuccessful_count": unsuccessful_count,
+            "review_count": review_count,
+            "known_outcome_count": known_outcome_count,
+            "success_rate": (
+                round(success_rate, 3)
+                if success_rate is not None
+                else None
+            ),
+            "average_confidence": (
+                round(average_confidence, 3)
+                if average_confidence is not None
+                else None
+            ),
+            "average_evaluation_score": (
+                round(average_evaluation_score, 3)
+                if average_evaluation_score is not None
+                else None
+            ),
+            "dominant_outcome": dominant_outcome,
         }
 
     def _analyze_feedback(
@@ -339,16 +556,13 @@ class Reasoning:
         reinforce_count = 0
         adjust_count = 0
         review_count = 0
-
         feedback_count = 0
         outcome_learning_count = 0
-
         scores: list[float] = []
 
         for entry in feedback_entries:
 
             memory_type = entry.get("type")
-
             data = entry.get("data", {})
 
             if not isinstance(data, dict):
@@ -356,7 +570,6 @@ class Reasoning:
 
             if memory_type == "feedback":
                 feedback_count += 1
-
                 signal = data.get("signal")
 
                 if signal is None:
@@ -366,17 +579,17 @@ class Reasoning:
 
             else:
                 outcome_learning_count += 1
-
-                signal = data.get("learning_signal")
-
-                score = data.get("evaluation_score")
+                signal = data.get(
+                    "learning_signal"
+                )
+                score = data.get(
+                    "evaluation_score"
+                )
 
             if signal == "reinforce":
                 reinforce_count += 1
-
             elif signal == "adjust":
                 adjust_count += 1
-
             elif signal == "review":
                 review_count += 1
 
@@ -400,7 +613,9 @@ class Reasoning:
             "status": status,
             "count": len(feedback_entries),
             "feedback_count": feedback_count,
-            "outcome_learning_count": outcome_learning_count,
+            "outcome_learning_count": (
+                outcome_learning_count
+            ),
             "reinforce_count": reinforce_count,
             "adjust_count": adjust_count,
             "review_count": review_count,
@@ -411,10 +626,99 @@ class Reasoning:
         self,
         feedback_analysis: dict[str, Any],
         historical_memory_analysis: dict[str, Any],
+        historical_outcome_analysis: dict[str, Any],
     ) -> dict[str, Any]:
 
-        if feedback_analysis["status"] == "adjustment_required":
+        outcome_count = historical_outcome_analysis.get(
+            "known_outcome_count",
+            0,
+        )
 
+        average_confidence = (
+            historical_outcome_analysis.get(
+                "average_confidence"
+            )
+        )
+
+        improved_count = historical_outcome_analysis.get(
+            "improved_count",
+            0,
+        )
+
+        degraded_count = historical_outcome_analysis.get(
+            "degraded_count",
+            0,
+        )
+
+        unchanged_count = historical_outcome_analysis.get(
+            "unchanged_count",
+            0,
+        )
+
+        # Aggregated historical outcome evidence has priority
+        # once enough known outcomes are available.
+        if (
+            outcome_count >= 3
+            and average_confidence is not None
+            and average_confidence >= 0.75
+        ):
+
+            if improved_count > degraded_count:
+                return {
+                    "action": "reinforce",
+                    "priority": "normal",
+                    "reason": (
+                        "historical outcomes show a "
+                        "repeated positive pattern"
+                    ),
+                    "historical_outcome_count": (
+                        outcome_count
+                    ),
+                    "historical_degraded_count": (
+                        degraded_count
+                    ),
+                    "historical_improved_count": (
+                        improved_count
+                    ),
+                    "historical_unchanged_count": (
+                        unchanged_count
+                    ),
+                    "historical_average_confidence": (
+                        average_confidence
+                    ),
+                }
+
+            if degraded_count > improved_count:
+                return {
+                    "action": "adjust",
+                    "priority": "high",
+                    "reason": (
+                        "historical outcomes show a "
+                        "repeated degraded pattern"
+                    ),
+                    "historical_outcome_count": (
+                        outcome_count
+                    ),
+                    "historical_degraded_count": (
+                        degraded_count
+                    ),
+                    "historical_improved_count": (
+                        improved_count
+                    ),
+                    "historical_unchanged_count": (
+                        unchanged_count
+                    ),
+                    "historical_average_confidence": (
+                        average_confidence
+                    ),
+                }
+
+        # Fall back to explicit feedback when aggregated
+        # historical outcomes are not yet strong enough.
+        if (
+            feedback_analysis["status"]
+            == "adjustment_required"
+        ):
             return {
                 "action": "adjust",
                 "priority": "high",
@@ -424,8 +728,10 @@ class Reasoning:
                 ),
             }
 
-        if feedback_analysis["status"] == "positive_history":
-
+        if (
+            feedback_analysis["status"]
+            == "positive_history"
+        ):
             return {
                 "action": "reinforce",
                 "priority": "normal",
@@ -435,13 +741,14 @@ class Reasoning:
                 ),
             }
 
-        recurring_machine_ids = historical_memory_analysis.get(
-            "recurring_machine_ids",
-            [],
+        recurring_machine_ids = (
+            historical_memory_analysis.get(
+                "recurring_machine_ids",
+                [],
+            )
         )
 
         if recurring_machine_ids:
-
             return {
                 "action": "review",
                 "priority": "normal",
@@ -466,12 +773,20 @@ class Reasoning:
         industrial_fields: dict[str, Any],
     ) -> dict[str, Any]:
 
-        machines = industrial_fields.get("machines", [])
-        alarms = industrial_fields.get("alarms", [])
+        machines = industrial_fields.get(
+            "machines",
+            []
+        )
+        alarms = industrial_fields.get(
+            "alarms",
+            []
+        )
 
         running_machines = 0
         stopped_machines = 0
         warning_machines = 0
+        critical_alarms = 0
+        warning_alarms = 0
 
         for machine in machines:
 
@@ -482,24 +797,26 @@ class Reasoning:
                 machine.get("status", "")
             ).lower()
 
-            if status == "running":
+            if status in {
+                "running",
+                "active",
+                "operational",
+            }:
                 running_machines += 1
 
             elif status in {
                 "stopped",
-                "down",
                 "offline",
+                "down",
             }:
                 stopped_machines += 1
 
             elif status in {
                 "warning",
                 "degraded",
+                "attention",
             }:
                 warning_machines += 1
-
-        critical_alarms = 0
-        warning_alarms = 0
 
         for alarm in alarms:
 
@@ -540,8 +857,10 @@ class Reasoning:
 
         return {
             "status": "industrial_analysis_completed",
-            "factory_available": industrial_fields.get("factory")
-            is not None,
+            "factory_available": (
+                industrial_fields.get("factory")
+                is not None
+            ),
             "production_line_count": len(
                 industrial_fields.get(
                     "production_lines",
@@ -569,11 +888,24 @@ class Reasoning:
         industrial_fields: dict[str, Any],
     ) -> dict[str, Any]:
 
-        machines = industrial_fields.get("machines", [])
-        sensors = industrial_fields.get("sensors", [])
-        production = industrial_fields.get("production")
-        energy = industrial_fields.get("energy")
-        alarms = industrial_fields.get("alarms", [])
+        machines = industrial_fields.get(
+            "machines",
+            []
+        )
+        sensors = industrial_fields.get(
+            "sensors",
+            []
+        )
+        production = industrial_fields.get(
+            "production"
+        )
+        energy = industrial_fields.get(
+            "energy"
+        )
+        alarms = industrial_fields.get(
+            "alarms",
+            []
+        )
 
         signals: list[dict[str, Any]] = []
 
@@ -598,9 +930,14 @@ class Reasoning:
             if not isinstance(value, (int, float)):
                 continue
 
-            machine_id = sensor.get("machine_id")
+            machine_id = sensor.get(
+                "machine_id"
+            )
 
-            if machine_id and machine_id not in machine_ids:
+            if (
+                machine_id
+                and machine_id not in machine_ids
+            ):
                 continue
 
             if sensor_type in {
@@ -636,12 +973,22 @@ class Reasoning:
 
         if isinstance(production, dict):
 
-            production_output = production.get("output")
-            production_target = production.get("target")
+            production_output = production.get(
+                "output"
+            )
+            production_target = production.get(
+                "target"
+            )
 
             if (
-                isinstance(production_output, (int, float))
-                and isinstance(production_target, (int, float))
+                isinstance(
+                    production_output,
+                    (int, float),
+                )
+                and isinstance(
+                    production_target,
+                    (int, float),
+                )
                 and production_target > 0
             ):
 
@@ -666,10 +1013,15 @@ class Reasoning:
 
         if isinstance(energy, dict):
 
-            energy_value = energy.get("consumption")
+            energy_value = energy.get(
+                "consumption"
+            )
 
             if (
-                isinstance(energy_value, (int, float))
+                isinstance(
+                    energy_value,
+                    (int, float),
+                )
                 and energy_value >= 480
             ):
 
@@ -702,7 +1054,9 @@ class Reasoning:
                 signals.append({
                     "type": "critical_alarm",
                     "alarm_id": alarm.get("id"),
-                    "machine_id": alarm.get("machine_id"),
+                    "machine_id": alarm.get(
+                        "machine_id"
+                    ),
                     "severity": severity,
                 })
 
@@ -722,7 +1076,9 @@ class Reasoning:
 
         for signal in signals:
 
-            machine_id = signal.get("machine_id")
+            machine_id = signal.get(
+                "machine_id"
+            )
 
             if machine_id:
 
@@ -768,13 +1124,28 @@ class Reasoning:
             "severity": severity,
             "signal_count": len(signals),
             "signals": signals,
-            "signal_types": sorted(signal_types),
-            "correlated_machines": correlated_machines,
-            "machine_signal_counts": machine_signal_counts,
-            "critical_alarm_count": alarm_signal_count,
-            "confidence": round(confidence, 2),
-            "production_output": production_output,
-            "production_target": production_target,
+            "signal_types": sorted(
+                signal_types
+            ),
+            "correlated_machines": (
+                correlated_machines
+            ),
+            "machine_signal_counts": (
+                machine_signal_counts
+            ),
+            "critical_alarm_count": (
+                alarm_signal_count
+            ),
+            "confidence": round(
+                confidence,
+                2,
+            ),
+            "production_output": (
+                production_output
+            ),
+            "production_target": (
+                production_target
+            ),
             "energy_value": energy_value,
         }
 
@@ -783,6 +1154,7 @@ class Reasoning:
         state_assessment: dict[str, Any],
         memory_analysis: dict[str, Any],
         historical_memory_analysis: dict[str, Any],
+        historical_outcome_analysis: dict[str, Any],
         feedback_analysis: dict[str, Any],
         learning_signal: dict[str, Any],
         industrial_analysis: dict[str, Any],
@@ -796,7 +1168,9 @@ class Reasoning:
             conclusions.append({
                 "type": "memory",
                 "status": "historical_context_available",
-                "entry_count": memory_analysis["entry_count"],
+                "entry_count": memory_analysis[
+                    "entry_count"
+                ],
             })
 
         if (
@@ -806,33 +1180,76 @@ class Reasoning:
 
             conclusions.append({
                 "type": "historical_memory",
-                "status": "historical_patterns_available",
-                "entry_count": historical_memory_analysis[
-                    "entry_count"
-                ],
+                "status": (
+                    "historical_patterns_available"
+                ),
+                "entry_count": (
+                    historical_memory_analysis[
+                        "entry_count"
+                    ]
+                ),
             })
 
-        recurring_machine_ids = historical_memory_analysis.get(
-            "recurring_machine_ids",
-            [],
+        recurring_machine_ids = (
+            historical_memory_analysis.get(
+                "recurring_machine_ids",
+                [],
+            )
         )
 
         if recurring_machine_ids:
 
             conclusions.append({
                 "type": "historical_pattern",
-                "status": "recurring_historical_machines",
+                "status": (
+                    "recurring_historical_machines"
+                ),
                 "machine_ids": recurring_machine_ids,
             })
 
-        if feedback_analysis["status"] == "adjustment_required":
+        if (
+            historical_outcome_analysis["status"]
+            != "no_historical_outcomes"
+        ):
+
+            conclusions.append({
+                "type": "historical_outcome",
+                "status": (
+                    historical_outcome_analysis[
+                        "status"
+                    ]
+                ),
+                "count": (
+                    historical_outcome_analysis[
+                        "count"
+                    ]
+                ),
+                "dominant_outcome": (
+                    historical_outcome_analysis[
+                        "dominant_outcome"
+                    ]
+                ),
+                "success_rate": (
+                    historical_outcome_analysis[
+                        "success_rate"
+                    ]
+                ),
+            })
+
+        if (
+            feedback_analysis["status"]
+            == "adjustment_required"
+        ):
 
             conclusions.append({
                 "type": "learning",
                 "status": "adjustment_required",
             })
 
-        elif feedback_analysis["status"] == "positive_history":
+        elif (
+            feedback_analysis["status"]
+            == "positive_history"
+        ):
 
             conclusions.append({
                 "type": "learning",
@@ -850,28 +1267,40 @@ class Reasoning:
                 "status": "critical_alarm_detected",
             })
 
-        elif operational_signal == "machine_stop_detected":
+        elif (
+            operational_signal
+            == "machine_stop_detected"
+        ):
 
             conclusions.append({
                 "type": "industrial",
                 "status": "machine_stop_detected",
             })
 
-        elif operational_signal == "machine_warning":
+        elif (
+            operational_signal
+            == "machine_warning"
+        ):
 
             conclusions.append({
                 "type": "industrial",
                 "status": "machine_warning_detected",
             })
 
-        elif operational_signal == "warning_alarm":
+        elif (
+            operational_signal
+            == "warning_alarm"
+        ):
 
             conclusions.append({
                 "type": "industrial",
                 "status": "warning_alarm_detected",
             })
 
-        elif operational_signal == "machines_operational":
+        elif (
+            operational_signal
+            == "machines_operational"
+        ):
 
             conclusions.append({
                 "type": "industrial",
@@ -882,13 +1311,23 @@ class Reasoning:
 
             conclusions.append({
                 "type": "anomaly",
-                "status": anomaly_analysis["status"],
-                "severity": anomaly_analysis["severity"],
-                "signal_count": anomaly_analysis["signal_count"],
-                "signal_types": anomaly_analysis["signal_types"],
-                "correlated_machines": anomaly_analysis[
-                    "correlated_machines"
+                "status": anomaly_analysis[
+                    "status"
                 ],
+                "severity": anomaly_analysis[
+                    "severity"
+                ],
+                "signal_count": anomaly_analysis[
+                    "signal_count"
+                ],
+                "signal_types": anomaly_analysis[
+                    "signal_types"
+                ],
+                "correlated_machines": (
+                    anomaly_analysis[
+                        "correlated_machines"
+                    ]
+                ),
             })
 
         conclusions.append({
@@ -902,13 +1341,10 @@ class Reasoning:
     def get_status(self) -> dict[str, Any]:
 
         return {
-            "component": "reasoning",
             "version": self.VERSION,
             "status": self.status,
             "analysis_count": self.analysis_count,
-            "last_analysis_id": (
-                self.last_analysis.get("analysis_id")
-                if self.last_analysis
-                else None
+            "last_analysis_available": (
+                self.last_analysis is not None
             ),
         }
