@@ -318,13 +318,18 @@ class Reasoning:
             entry
             for entry in memory_entries
             if isinstance(entry, dict)
-            and entry.get("type") == "feedback"
+            and entry.get("type") in {
+                "feedback",
+                "outcome_learning",
+            }
         ]
 
         if not feedback_entries:
             return {
                 "status": "no_feedback",
                 "count": 0,
+                "feedback_count": 0,
+                "outcome_learning_count": 0,
                 "reinforce_count": 0,
                 "adjust_count": 0,
                 "review_count": 0,
@@ -334,19 +339,37 @@ class Reasoning:
         reinforce_count = 0
         adjust_count = 0
         review_count = 0
+
+        feedback_count = 0
+        outcome_learning_count = 0
+
         scores: list[float] = []
 
         for entry in feedback_entries:
+
+            memory_type = entry.get("type")
 
             data = entry.get("data", {})
 
             if not isinstance(data, dict):
                 data = {}
 
-            signal = data.get("signal")
+            if memory_type == "feedback":
+                feedback_count += 1
 
-            if signal is None:
-                signal = data.get("action")
+                signal = data.get("signal")
+
+                if signal is None:
+                    signal = data.get("action")
+
+                score = data.get("score")
+
+            else:
+                outcome_learning_count += 1
+
+                signal = data.get("learning_signal")
+
+                score = data.get("evaluation_score")
 
             if signal == "reinforce":
                 reinforce_count += 1
@@ -356,8 +379,6 @@ class Reasoning:
 
             elif signal == "review":
                 review_count += 1
-
-            score = data.get("score")
 
             if isinstance(score, (int, float)):
                 scores.append(float(score))
@@ -378,6 +399,8 @@ class Reasoning:
         return {
             "status": status,
             "count": len(feedback_entries),
+            "feedback_count": feedback_count,
+            "outcome_learning_count": outcome_learning_count,
             "reinforce_count": reinforce_count,
             "adjust_count": adjust_count,
             "review_count": review_count,

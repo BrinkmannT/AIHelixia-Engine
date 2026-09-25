@@ -1,7 +1,7 @@
 """
 AIHelixia Intelligence Engine
 Evaluation Layer
-Version: 0.3.0
+Version: 0.4.0
 """
 
 from __future__ import annotations
@@ -15,19 +15,20 @@ class Evaluation:
 
     Verantwortlichkeiten:
     - technische Action-Ausführung prüfen
-    - beobachtbaren Outcome unterscheiden
-    - Execution Success nicht mit Outcome Success verwechseln
-    - strukturierte Bewertung erzeugen
+    - beobachtbaren Outcome auswerten
+    - Execution Success von Outcome Success trennen
+    - strukturiertes Evaluation-Ergebnis erzeugen
     - Grundlage für Feedback und Learning Signal schaffen
 
-    V0.3.0:
+    V0.4.0:
     - deterministisch
     - reproduzierbar
     - keine LLM-Abhängigkeit
-    - trennt Execution Status und Outcome Status
+    - Outcome Engine Integration
+    - Execution und Outcome getrennt
     """
 
-    VERSION = "0.3.0"
+    VERSION = "0.4.0"
 
     def __init__(self) -> None:
         self.status = "created"
@@ -46,21 +47,20 @@ class Evaluation:
     def evaluate(
         self,
         action_result: dict[str, Any],
+        outcome_result: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """
-        Bewertet das Ergebnis einer ausgeführten Action.
+        Bewertet Action-Ausführung und optionalen Outcome.
+
+        action_result:
+            Ergebnis der technischen Action-Ausführung.
+
+        outcome_result:
+            Ergebnis der Outcome Engine.
 
         Wichtig:
         Eine erfolgreich ausgeführte Action bedeutet nicht automatisch,
         dass das industrielle Problem gelöst wurde.
-
-        Deshalb werden zwei Ebenen getrennt:
-
-        1. execution
-           Wurde die Action technisch ausgeführt?
-
-        2. outcome
-           Ist ein tatsächlicher Outcome bekannt und erfolgreich?
         """
 
         if self.status != "running":
@@ -74,7 +74,19 @@ class Evaluation:
                 "Action-Ergebnis muss ein Dictionary sein."
             )
 
+        if outcome_result is not None and not isinstance(
+            outcome_result,
+            dict,
+        ):
+            raise TypeError(
+                "Outcome-Ergebnis muss ein Dictionary sein."
+            )
+
         self.evaluation_count += 1
+
+        # ---------------------------------------------------------
+        # 1. Technische Action-Ausführung
+        # ---------------------------------------------------------
 
         execution_status = action_result.get(
             "status",
@@ -94,31 +106,6 @@ class Evaluation:
             False,
         )
 
-        outcome = action_result.get(
-            "outcome",
-        )
-
-        outcome_status = "unknown"
-        outcome_success: bool | None = None
-
-        if isinstance(outcome, dict):
-            outcome_status = outcome.get(
-                "status",
-                "unknown",
-            )
-
-            if "success" in outcome:
-                outcome_success = outcome.get(
-                    "success",
-                )
-
-        elif outcome is not None:
-            outcome_status = str(outcome)
-
-        # ---------------------------------------------------------
-        # 1. Technische Ausführung bewerten
-        # ---------------------------------------------------------
-
         if execution_status != "executed":
             execution_evaluation = "failed"
             execution_score = 0.0
@@ -132,55 +119,114 @@ class Evaluation:
             execution_score = 0.0
 
         # ---------------------------------------------------------
-        # 2. Tatsächlichen Outcome bewerten
+        # 2. Outcome auswerten
+        # ---------------------------------------------------------
+
+        outcome_status = "unknown"
+        outcome_success: bool | None = None
+        outcome_score: float | None = None
+        outcome_confidence = 0.0
+
+        if outcome_result is not None:
+
+            outcome_status = outcome_result.get(
+                "outcome",
+                "unknown",
+            )
+
+            raw_success = outcome_result.get(
+                "success",
+            )
+
+            if isinstance(raw_success, bool):
+                outcome_success = raw_success
+
+            raw_confidence = outcome_result.get(
+                "confidence",
+                0.0,
+            )
+
+            if isinstance(raw_confidence, (int, float)):
+                outcome_confidence = float(
+                    raw_confidence
+                )
+
+            if outcome_success is True:
+                outcome_score = 1.0
+
+            elif outcome_success is False:
+                outcome_score = 0.0
+
+        # ---------------------------------------------------------
+        # 3. Outcome Evaluation
         # ---------------------------------------------------------
 
         if outcome_success is True:
             outcome_evaluation = "successful"
-            outcome_score = 1.0
 
         elif outcome_success is False:
-            outcome_evaluation = "unsuccessful"
-            outcome_score = 0.0
+            if outcome_status == "unchanged":
+                outcome_evaluation = "unchanged"
+            else:
+                outcome_evaluation = "unsuccessful"
 
         else:
             outcome_evaluation = "unknown"
-            outcome_score = None
 
         # ---------------------------------------------------------
-        # 3. Gesamtevaluation
+        # 4. Gesamtevaluation
         # ---------------------------------------------------------
 
         if execution_evaluation == "failed":
+
             evaluation = "failed"
             score = 0.0
+
             message = (
-                "Die Action wurde technisch nicht erfolgreich "
-                "ausgeführt."
+                "Die Action wurde technisch nicht "
+                "erfolgreich ausgeführt."
             )
 
         elif outcome_evaluation == "successful":
+
             evaluation = "successful"
             score = outcome_score
+
             message = (
                 "Die Action wurde erfolgreich ausgeführt "
                 "und der beobachtete Outcome war erfolgreich."
             )
 
         elif outcome_evaluation == "unsuccessful":
+
             evaluation = "unsuccessful"
             score = outcome_score
+
             message = (
                 "Die Action wurde technisch ausgeführt, "
                 "aber der beobachtete Outcome war nicht erfolgreich."
             )
 
+        elif outcome_evaluation == "unchanged":
+
+            evaluation = "unchanged"
+            score = 0.0
+
+            message = (
+                "Die Action wurde ausgeführt, "
+                "aber der beobachtete Zustand hat sich "
+                "nicht verbessert."
+            )
+
         else:
+
             evaluation = "execution_success_outcome_unknown"
             score = execution_score
+
             message = (
-                "Die Action wurde technisch erfolgreich ausgeführt, "
-                "aber ein tatsächlicher Outcome ist noch nicht bekannt."
+                "Die Action wurde technisch erfolgreich "
+                "ausgeführt, aber ein tatsächlicher "
+                "Outcome ist noch nicht bekannt."
             )
 
         return {
@@ -198,11 +244,15 @@ class Evaluation:
             "execution_evaluation": execution_evaluation,
             "execution_score": execution_score,
 
-            # Tatsächlicher Outcome
+            # Outcome
             "outcome_status": outcome_status,
             "outcome_evaluation": outcome_evaluation,
             "outcome_score": outcome_score,
+            "outcome_confidence": outcome_confidence,
             "outcome_known": outcome_success is not None,
+
+            # Metadaten
+            "outcome_result_available": outcome_result is not None,
         }
 
     def get_status(self) -> dict[str, Any]:

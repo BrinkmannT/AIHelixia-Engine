@@ -1,7 +1,7 @@
 """
 AIHelixia Intelligence Engine
 Feedback Layer
-Version: 0.3.0
+Version: 0.4.0
 """
 
 from __future__ import annotations
@@ -12,23 +12,18 @@ from typing import Any
 class Feedback:
     """
     Verarbeitet Evaluation-Ergebnisse und erzeugt
-    strukturiertes Feedback für die nächste Verarbeitung.
+    strukturierte Learning Signals.
 
-    Verantwortlichkeiten:
-    - Evaluation aufnehmen
-    - technische Ausführung von tatsächlichem Outcome unterscheiden
-    - Erfolg oder Misserfolg klassifizieren
-    - Verbesserungssignale erzeugen
-    - Feedback strukturiert bereitstellen
-
-    V0.3.0:
+    V0.4.0:
     - deterministisch
     - reproduzierbar
     - keine LLM-Abhängigkeit
-    - berücksichtigt unbekannte Outcomes
+    - Outcome-aware
+    - unterscheidet improved / degraded /
+      unchanged / unknown
     """
 
-    VERSION = "0.3.0"
+    VERSION = "0.4.0"
 
     def __init__(self) -> None:
         self.status = "created"
@@ -49,13 +44,21 @@ class Feedback:
         evaluation: dict[str, Any],
     ) -> dict[str, Any]:
         """
-        Verarbeitet ein Evaluation-Ergebnis und erzeugt
-        ein strukturiertes Feedback-Signal.
+        Verarbeitet ein Evaluation-Ergebnis.
 
-        Wichtig:
-        Ein technisch erfolgreicher Action-Run mit unbekanntem
-        Outcome darf nicht als positives Learning Signal
-        interpretiert werden.
+        Learning Signals:
+
+        improved
+            → reinforce
+
+        degraded
+            → adjust
+
+        unchanged
+            → review
+
+        unknown
+            → review
         """
 
         if self.status != "running":
@@ -76,114 +79,130 @@ class Feedback:
             "unknown",
         )
 
+        outcome_status = evaluation.get(
+            "outcome_status",
+            "unknown",
+        )
+
+        outcome_confidence = evaluation.get(
+            "outcome_confidence",
+            0.0,
+        )
+
         score = evaluation.get(
             "score",
             0.0,
         )
 
-        outcome_known = evaluation.get(
-            "outcome_known",
-            False,
-        )
-
-        outcome_evaluation = evaluation.get(
-            "outcome_evaluation",
-            "unknown",
-        )
-
-        execution_evaluation = evaluation.get(
-            "execution_evaluation",
-            "unknown",
-        )
-
         # ---------------------------------------------------------
-        # 1. Bestätigter positiver Outcome
+        # 1. Bestätigte Verbesserung
         # ---------------------------------------------------------
 
         if (
             evaluation_result == "successful"
-            and outcome_known is True
-            and outcome_evaluation == "successful"
+            and outcome_status == "improved"
         ):
             feedback_type = "positive"
             signal = "reinforce"
+
             recommendation = (
-                "Der beobachtete Outcome war erfolgreich. "
-                "Die zugrunde liegende Strategie kann "
-                "unter vergleichbaren Bedingungen "
-                "beibehalten werden."
+                "Der beobachtete Zustand hat sich verbessert. "
+                "Die zugrunde liegende Strategie kann unter "
+                "vergleichbaren Bedingungen verstärkt werden."
             )
 
         # ---------------------------------------------------------
-        # 2. Bestätigter negativer Outcome
+        # 2. Bestätigte Verschlechterung
         # ---------------------------------------------------------
 
         elif (
             evaluation_result == "unsuccessful"
-            and outcome_known is True
-            and outcome_evaluation == "unsuccessful"
+            and outcome_status == "degraded"
         ):
             feedback_type = "negative"
             signal = "adjust"
+
             recommendation = (
-                "Der beobachtete Outcome war nicht erfolgreich. "
-                "Die Strategie sollte überprüft und "
-                "gegebenenfalls angepasst werden."
+                "Der beobachtete Zustand hat sich verschlechtert. "
+                "Die zugrunde liegende Strategie sollte überprüft "
+                "und angepasst werden."
             )
 
         # ---------------------------------------------------------
-        # 3. Action technisch erfolgreich, Outcome unbekannt
+        # 3. Zustand unverändert
+        # ---------------------------------------------------------
+
+        elif (
+            evaluation_result == "unchanged"
+            and outcome_status == "unchanged"
+        ):
+            feedback_type = "neutral"
+            signal = "review"
+
+            recommendation = (
+                "Der beobachtete Zustand hat sich nicht verändert. "
+                "Die Strategie sollte überprüft werden, bevor "
+                "sie erneut eingesetzt wird."
+            )
+
+        # ---------------------------------------------------------
+        # 4. Outcome unbekannt
         # ---------------------------------------------------------
 
         elif (
             evaluation_result
             == "execution_success_outcome_unknown"
-            or outcome_known is False
+            or outcome_status == "unknown"
         ):
             feedback_type = "pending"
             signal = "review"
+
             recommendation = (
-                "Die Action wurde technisch erfolgreich "
-                "ausgeführt, aber der tatsächliche Outcome "
-                "ist noch nicht bekannt. Es sollte zunächst "
-                "eine Outcome-Beobachtung erfolgen."
+                "Die Action wurde technisch erfolgreich ausgeführt, "
+                "aber der tatsächliche Outcome ist noch nicht bekannt. "
+                "Es sollte zunächst eine Outcome-Beobachtung erfolgen."
             )
 
         # ---------------------------------------------------------
-        # 4. Technische Ausführung fehlgeschlagen
+        # 5. Technischer Fehler
         # ---------------------------------------------------------
 
-        elif execution_evaluation == "failed":
+        elif evaluation_result == "failed":
             feedback_type = "error"
             signal = "adjust"
+
             recommendation = (
-                "Die Action konnte technisch nicht "
-                "erfolgreich ausgeführt werden. "
-                "Die Ausführung sollte überprüft werden."
+                "Die Action konnte technisch nicht erfolgreich "
+                "ausgeführt werden. Die Ausführung sollte "
+                "überprüft und angepasst werden."
             )
 
         # ---------------------------------------------------------
-        # 5. Fallback
+        # 6. Fallback
         # ---------------------------------------------------------
 
         else:
             feedback_type = "error"
             signal = "review"
+
             recommendation = (
                 "Das Evaluation-Ergebnis ist nicht eindeutig. "
-                "Es sollte überprüft werden, bevor die "
-                "Strategie erneut verwendet wird."
+                "Es sollte überprüft werden, bevor die Strategie "
+                "erneut verwendet wird."
             )
 
         return {
             "status": "processed",
             "version": self.VERSION,
             "feedback_id": self.feedback_count,
+
             "feedback_type": feedback_type,
             "signal": signal,
+
             "score": score,
-            "outcome_known": outcome_known,
-            "outcome_evaluation": outcome_evaluation,
+            "outcome_status": outcome_status,
+            "outcome_confidence": outcome_confidence,
+
             "recommendation": recommendation,
         }
 

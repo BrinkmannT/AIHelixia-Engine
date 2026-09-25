@@ -20,6 +20,7 @@ from core.prediction import Prediction
 from core.reasoning import Reasoning
 from core.root_cause import RootCause
 from core.world_state import WorldState
+from core.outcome import Outcome
 from providers.model_provider import ModelProvider
 
 
@@ -85,6 +86,7 @@ class AIHelixiaEngine:
         self.action = Action()
         self.evaluation = Evaluation()
         self.feedback = Feedback()
+        self.outcome = Outcome()
 
         self.components = [
             "model_provider",
@@ -122,6 +124,7 @@ class AIHelixiaEngine:
         self.action.start()
         self.evaluation.start()
         self.feedback.start()
+        self.outcome.start()
 
         if self.model_provider.status != "loaded":
             self.model_provider.load()
@@ -226,6 +229,7 @@ class AIHelixiaEngine:
             )
 
         self.feedback.stop()
+        self.outcome.stop()
         self.evaluation.stop()
         self.action.stop()
         self.decision.stop()
@@ -476,6 +480,69 @@ class AIHelixiaEngine:
             "action": action_result,
             "evaluation": evaluation_result,
             "feedback": feedback_result,
+        }
+
+    def evaluate_outcome(
+        self,
+        previous_state: dict,
+        observed_state: dict,
+        action_result: dict,
+    ) -> dict:
+        """
+        Verarbeitet einen beobachteten Outcome nach einer Action.
+
+        Pipeline:
+
+        previous_state
+            ↓
+        observed_state
+            ↓
+        Outcome
+            ↓
+        Evaluation
+            ↓
+        Feedback
+        """
+
+        outcome_result = self.outcome.evaluate(
+            previous_state=previous_state,
+            observed_state=observed_state,
+        )
+
+        evaluation_result = self.evaluation.evaluate(
+            action_result=action_result,
+            outcome_result=outcome_result,
+        )
+
+        feedback_result = self.feedback.process(
+            evaluation_result,
+        )
+
+        # ---------------------------------------------------------
+        # Outcome Learning Memory
+        # ---------------------------------------------------------
+        learning_memory = {
+            "type": "outcome_learning",
+            "outcome": outcome_result.get("outcome"),
+            "outcome_success": outcome_result.get("success"),
+            "outcome_confidence": outcome_result.get("confidence"),
+            "evaluation": evaluation_result.get("evaluation"),
+            "evaluation_score": evaluation_result.get("score"),
+            "feedback_type": feedback_result.get("feedback_type"),
+            "learning_signal": feedback_result.get("signal"),
+            "recommendation": feedback_result.get("recommendation"),
+        }
+
+        self.memory.store(
+            "outcome_learning",
+            learning_memory,
+        )
+
+        return {
+            "outcome": outcome_result,
+            "evaluation": evaluation_result,
+            "feedback": feedback_result,
+            "learning_memory": learning_memory,
         }
 
     def get_status(self) -> dict[str, object]:
