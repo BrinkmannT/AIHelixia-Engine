@@ -18,6 +18,7 @@ from core.perception import Perception
 from core.persistence import Persistence
 from core.prediction import Prediction
 from core.reasoning import Reasoning
+from core.root_cause import RootCause
 from core.world_state import WorldState
 from providers.model_provider import ModelProvider
 
@@ -79,6 +80,7 @@ class AIHelixiaEngine:
         self.memory = Memory()
         self.reasoning = Reasoning()
         self.prediction = Prediction()
+        self.root_cause = RootCause()
         self.decision = Decision()
         self.action = Action()
         self.evaluation = Evaluation()
@@ -93,6 +95,7 @@ class AIHelixiaEngine:
             "memory",
             "reasoning",
             "prediction",
+            "root_cause",
             "decision",
             "action",
             "evaluation",
@@ -114,6 +117,7 @@ class AIHelixiaEngine:
         self.memory.start()
         self.reasoning.start()
         self.prediction.start()
+        self.root_cause.start()
         self.decision.start()
         self.action.start()
         self.evaluation.start()
@@ -225,6 +229,7 @@ class AIHelixiaEngine:
         self.evaluation.stop()
         self.action.stop()
         self.decision.stop()
+        self.root_cause.stop()
         self.prediction.stop()
         self.reasoning.stop()
         self.memory.stop()
@@ -364,34 +369,41 @@ class AIHelixiaEngine:
             reasoning_result,
         )
 
-        # 8. Decision
+        # 8. Root Cause Analysis
+        root_cause_result = self.root_cause.analyze(
+            reasoning=reasoning_result,
+            prediction=prediction_result,
+        )
+
+        # 9. Decision
         decision_result = self.decision.decide(
             reasoning_result,
             prediction_result,
+            root_cause_result,
         )
 
-        # 9. Memory
+        # 10. Memory
         self.memory.store(
             "decision",
             decision_result,
         )
 
-        # 10. Action
+        # 11. Action
         action_result = self.action.execute(
             decision_result,
         )
 
-        # 11. Evaluation
+        # 12. Evaluation
         evaluation_result = self.evaluation.evaluate(
             action_result=action_result,
         )
 
-        # 12. Feedback
+        # 13. Feedback
         feedback_result = self.feedback.process(
             evaluation_result,
         )
 
-        # 13. Memory
+        # 14. Memory
         self.memory.store(
             "evaluation",
             evaluation_result,
@@ -402,7 +414,7 @@ class AIHelixiaEngine:
             feedback_result,
         )
 
-        # 14. Persistence
+        # 15. Persistence
         self.persistence.save_ai_result(
             "reasoning",
             reasoning_result,
@@ -411,6 +423,11 @@ class AIHelixiaEngine:
         self.persistence.save_ai_result(
             "prediction",
             prediction_result,
+        )
+
+        self.persistence.save_ai_result(
+            "root_cause",
+            root_cause_result,
         )
 
         self.persistence.save_ai_result(
@@ -438,6 +455,7 @@ class AIHelixiaEngine:
             {
                 "reasoning": reasoning_result,
                 "prediction": prediction_result,
+                "root_cause": root_cause_result,
                 "decision": decision_result,
                 "action": action_result,
                 "evaluation": evaluation_result,
@@ -453,6 +471,7 @@ class AIHelixiaEngine:
             "memory": memory_result,
             "reasoning": reasoning_result,
             "prediction": prediction_result,
+            "root_cause": root_cause_result,
             "decision": decision_result,
             "action": action_result,
             "evaluation": evaluation_result,

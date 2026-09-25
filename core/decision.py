@@ -1,7 +1,7 @@
 """
 AIHelixia Intelligence Engine
 Decision Layer
-Version: 0.4.3
+Version: 0.5.0
 """
 
 from __future__ import annotations
@@ -16,19 +16,23 @@ class Decision:
     Verantwortlichkeiten:
     - Reasoning-Ergebnisse auswerten
     - Predictions berücksichtigen
+    - Root-Cause-Ergebnisse berücksichtigen
     - Learning Signals berücksichtigen
     - strukturierten nächsten Schritt bestimmen
     - noch keine externe Aktion ausführen
 
-    V0.4.3:
+    V0.5.0:
     - deterministisch
     - reproduzierbar
     - Memory-aware
     - Feedback-aware
     - Learning Signal-aware
+    - Root-Cause-aware
     - keine LLM-Abhängigkeit
     - keine externe Aktion
     """
+
+    VERSION = "0.5.0"
 
     def __init__(self) -> None:
         self.status = "created"
@@ -47,10 +51,11 @@ class Decision:
         self,
         reasoning: dict[str, Any],
         prediction: dict[str, Any],
+        root_cause: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """
         Erzeugt eine strukturierte Entscheidung auf Basis
-        von Reasoning, Prediction und Learning Signal.
+        von Reasoning, Prediction, Root Cause und Learning Signal.
         """
 
         if self.status != "running":
@@ -67,6 +72,14 @@ class Decision:
         if not isinstance(prediction, dict):
             raise TypeError(
                 "Prediction muss ein Dictionary sein."
+            )
+
+        if root_cause is not None and not isinstance(
+            root_cause,
+            dict,
+        ):
+            raise TypeError(
+                "Root Cause muss ein Dictionary oder None sein."
             )
 
         state_assessment = reasoning.get(
@@ -99,6 +112,46 @@ class Decision:
             "normal",
         )
 
+        # ---------------------------------------------------------
+        # Root Cause Analysis
+        # ---------------------------------------------------------
+
+        root_cause_status = "not_available"
+        root_cause_priority = "none"
+        root_cause_type = None
+        root_cause_hypothesis_count = 0
+
+        if isinstance(root_cause, dict):
+
+            root_cause_status = root_cause.get(
+                "status",
+                "unknown",
+            )
+
+            root_cause_hypothesis_count = root_cause.get(
+                "hypothesis_count",
+                0,
+            )
+
+            primary_hypothesis = root_cause.get(
+                "primary_hypothesis",
+                {},
+            )
+
+            if isinstance(primary_hypothesis, dict):
+                root_cause_priority = primary_hypothesis.get(
+                    "priority",
+                    "none",
+                )
+
+                root_cause_type = primary_hypothesis.get(
+                    "type"
+                )
+
+        # ---------------------------------------------------------
+        # Decision Logic
+        # ---------------------------------------------------------
+
         if state_assessment == "no_observations":
 
             decision_type = "wait"
@@ -107,6 +160,37 @@ class Decision:
             rationale = (
                 "Es liegen keine Beobachtungen vor. "
                 "Die Engine wartet auf weitere Informationen."
+            )
+
+        elif (
+            root_cause_status == "hypotheses_generated"
+            and root_cause_priority == "critical"
+        ):
+
+            decision_type = "root_cause_review"
+            action = "review_strategy"
+
+            rationale = (
+                "Die Root-Cause-Analyse enthält eine "
+                "kritische Hypothese. Der erkannte Zustand "
+                "soll gezielt überprüft werden, bevor "
+                "eine weitere Strategie beibehalten wird."
+            )
+
+        elif (
+            root_cause_status == "hypotheses_generated"
+            and root_cause_priority == "high"
+            and learning_type == "adjust"
+        ):
+
+            decision_type = "root_cause_adjust"
+            action = "review_strategy"
+
+            rationale = (
+                "Die Root-Cause-Analyse enthält eine "
+                "hoch priorisierte Hypothese und historisches "
+                "Feedback signalisiert eine notwendige "
+                "Anpassung der bisherigen Strategie."
             )
 
         elif learning_type == "adjust":
@@ -166,10 +250,17 @@ class Decision:
 
         return {
             "status": "decided",
+            "version": self.VERSION,
             "decision_type": decision_type,
             "action": action,
             "rationale": rationale,
             "scenario_count": len(scenarios),
+            "root_cause": {
+                "status": root_cause_status,
+                "hypothesis_count": root_cause_hypothesis_count,
+                "primary_type": root_cause_type,
+                "priority": root_cause_priority,
+            },
             "learning_signal": {
                 "type": learning_type,
                 "priority": learning_priority,
@@ -181,5 +272,6 @@ class Decision:
 
         return {
             "component": "decision",
+            "version": self.VERSION,
             "status": self.status,
         }
