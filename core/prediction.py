@@ -1,7 +1,7 @@
 """
 AIHelixia Intelligence Engine
 Prediction Layer
-Version: 0.6.0
+Version: 0.9.0
 """
 
 from __future__ import annotations
@@ -18,13 +18,16 @@ class Prediction:
     - Reasoning-Ergebnis berücksichtigen
     - industrielle Anomalien berücksichtigen
     - zukünftige Szenarien deterministisch erzeugen
+    - Evidence strukturiert erfassen
+    - qualitative Confidence aus vorhandener Evidenz ableiten
     - beobachteten Zustand klar von einer Prediction trennen
 
     Keine Behauptung realer Ausfallwahrscheinlichkeiten.
+    Keine künstliche Prozentwahrscheinlichkeit.
     Keine LLM-Abhängigkeit.
     """
 
-    VERSION = "0.6.0"
+    VERSION = "0.9.0"
 
     def __init__(self) -> None:
         self.status = "created"
@@ -90,6 +93,15 @@ class Prediction:
             )
         )
 
+        scenarios = [
+            self._attach_evidence(scenario)
+            for scenario in scenarios
+        ]
+
+        evidence_summary = self._build_evidence_summary(
+            scenarios=scenarios,
+        )
+
         self.prediction_count += 1
 
         result = {
@@ -98,6 +110,7 @@ class Prediction:
             "prediction_id": self.prediction_count,
             "scenario_count": len(scenarios),
             "scenarios": scenarios,
+            "evidence_summary": evidence_summary,
         }
 
         self.last_prediction = result
@@ -376,7 +389,7 @@ class Prediction:
             })
 
         # ----------------------------------------------------------
-        # NEW: anomaly-driven prediction
+        # Anomaly-driven prediction
         # ----------------------------------------------------------
 
         if anomaly_status in {
@@ -431,10 +444,7 @@ class Prediction:
                     })
 
             # Production impact
-            if (
-                "production_decreased"
-                in signal_types
-            ):
+            if "production_decreased" in signal_types:
 
                 scenarios.append({
                     "type": "potential_production_impact",
@@ -451,10 +461,7 @@ class Prediction:
                 })
 
             # Energy impact
-            if (
-                "energy_increased"
-                in signal_types
-            ):
+            if "energy_increased" in signal_types:
 
                 scenarios.append({
                     "type": "potential_energy_persistence",
@@ -503,6 +510,168 @@ class Prediction:
             })
 
         return scenarios
+
+    @staticmethod
+    def _attach_evidence(
+        scenario: dict[str, Any],
+    ) -> dict[str, Any]:
+
+        trigger_signals = scenario.get(
+            "trigger_signals",
+            [],
+        )
+
+        if not isinstance(trigger_signals, list):
+            trigger_signals = []
+
+        correlated_machines = scenario.get(
+            "machine_id",
+            [],
+        )
+
+        if correlated_machines:
+            if not isinstance(
+                correlated_machines,
+                list,
+            ):
+                correlated_machines = [
+                    correlated_machines
+                ]
+        else:
+            correlated_machines = []
+
+        source = scenario.get(
+            "source"
+        )
+
+        supporting_signals = list(
+            dict.fromkeys(
+                signal
+                for signal in trigger_signals
+                if signal
+            )
+        )
+
+        evidence_count = len(
+            supporting_signals
+        ) + len(
+            correlated_machines
+        )
+
+        if source:
+            evidence_count += 1
+
+        confidence = scenario.get(
+            "confidence",
+            "low",
+        )
+
+        confidence_factors: list[str] = []
+
+        if source:
+            confidence_factors.append(
+                "source_available"
+            )
+
+        if supporting_signals:
+            confidence_factors.append(
+                "supporting_signals_available"
+            )
+
+        if correlated_machines:
+            confidence_factors.append(
+                "correlated_machine_available"
+            )
+
+        if evidence_count >= 3:
+            evidence_strength = "strong"
+
+        elif evidence_count == 2:
+            evidence_strength = "moderate"
+
+        elif evidence_count == 1:
+            evidence_strength = "limited"
+
+        else:
+            evidence_strength = "none"
+
+        scenario["evidence"] = {
+            "evidence_count": evidence_count,
+            "supporting_signals": supporting_signals,
+            "correlated_machines": correlated_machines,
+            "historical_support": "not_available",
+            "confidence_level": confidence,
+            "confidence_factors": confidence_factors,
+            "evidence_strength": evidence_strength,
+        }
+
+        return scenario
+
+    @staticmethod
+    def _build_evidence_summary(
+        scenarios: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+
+        evidence_count = 0
+        strong_count = 0
+        moderate_count = 0
+        limited_count = 0
+        none_count = 0
+
+        confidence_levels: dict[str, int] = {
+            "low": 0,
+            "medium": 0,
+            "high": 0,
+        }
+
+        for scenario in scenarios:
+
+            evidence = scenario.get(
+                "evidence",
+                {},
+            )
+
+            evidence_count += int(
+                evidence.get(
+                    "evidence_count",
+                    0,
+                )
+            )
+
+            strength = evidence.get(
+                "evidence_strength"
+            )
+
+            if strength == "strong":
+                strong_count += 1
+
+            elif strength == "moderate":
+                moderate_count += 1
+
+            elif strength == "limited":
+                limited_count += 1
+
+            else:
+                none_count += 1
+
+            confidence = scenario.get(
+                "confidence",
+                "low",
+            )
+
+            if confidence in confidence_levels:
+                confidence_levels[confidence] += 1
+
+        return {
+            "scenario_count": len(scenarios),
+            "total_evidence_count": evidence_count,
+            "strong_evidence_scenarios": strong_count,
+            "moderate_evidence_scenarios": moderate_count,
+            "limited_evidence_scenarios": limited_count,
+            "no_evidence_scenarios": none_count,
+            "confidence_levels": confidence_levels,
+            "historical_support": "not_available",
+        }
 
     @staticmethod
     def _count(
