@@ -1,7 +1,7 @@
 """
 AIHelixia Intelligence Engine
 Root Cause Analysis Layer
-Version: 0.2.0
+Version: 0.3.0
 """
 
 from __future__ import annotations
@@ -13,17 +13,20 @@ class RootCause:
     """
     Deterministische Root-Cause-Analyse.
 
-    Die Komponente erzeugt aus Anomalie- und
-    Produktionssignalen strukturierte Ursachen-Hypothesen.
+    Verantwortlichkeiten:
+    - Reasoning-Anomalien auswerten
+    - Prediction-Ergebnisse auswerten
+    - mögliche Ursachenhypothesen erzeugen
+    - Evidence strukturiert an Hypothesen binden
+    - qualitative Confidence ableiten
+    - primäre Hypothese bestimmen
 
-    Die Primary Hypothesis wird deterministisch
-    anhand der höchsten Priorität ausgewählt.
-
-    Keine Behauptung einer physikalisch validierten Ursache.
-    Keine LLM-Abhängigkeit.
+    Die Komponente behauptet keine physikalisch validierte Ursache.
+    Hypothesen müssen anhand der verfügbaren Evidenz interpretiert
+    und später mit realen Daten validiert werden.
     """
 
-    VERSION = "0.2.0"
+    VERSION = "0.3.0"
 
     PRIORITY_ORDER = {
         "critical": 4,
@@ -42,29 +45,6 @@ class RootCause:
 
     def stop(self) -> None:
         self.status = "stopped"
-
-    def _select_primary_hypothesis(
-        self,
-        hypotheses: list[dict[str, Any]],
-    ) -> dict[str, Any] | None:
-        """
-        Wählt deterministisch die Hypothese mit
-        der höchsten Priorität aus.
-
-        Bei gleicher Priorität bleibt die bestehende
-        Reihenfolge der Hypothesen erhalten.
-        """
-
-        if not hypotheses:
-            return None
-
-        return max(
-            hypotheses,
-            key=lambda hypothesis: self.PRIORITY_ORDER.get(
-                hypothesis.get("priority", "low"),
-                0,
-            ),
-        )
 
     def analyze(
         self,
@@ -92,23 +72,30 @@ class RootCause:
             {},
         )
 
-        if not isinstance(anomaly_analysis, dict):
+        if not isinstance(
+            anomaly_analysis,
+            dict,
+        ):
             anomaly_analysis = {}
+
+        anomaly_status = anomaly_analysis.get(
+            "status"
+        )
+
+        anomaly_severity = anomaly_analysis.get(
+            "severity"
+        )
 
         signals = anomaly_analysis.get(
             "signals",
             [],
         )
 
-        if not isinstance(signals, list):
+        if not isinstance(
+            signals,
+            list,
+        ):
             signals = []
-
-        signal_types = {
-            signal.get("type")
-            for signal in signals
-            if isinstance(signal, dict)
-            and signal.get("type")
-        }
 
         correlated_machines = anomaly_analysis.get(
             "correlated_machines",
@@ -119,166 +106,457 @@ class RootCause:
             correlated_machines,
             list,
         ):
-            correlated_machines = []
+            correlated_machines = [
+                correlated_machines
+            ] if correlated_machines else []
+
+        signal_types = [
+            signal.get("type")
+            for signal in signals
+            if isinstance(signal, dict)
+            and signal.get("type")
+        ]
+
+        prediction_scenarios = prediction.get(
+            "scenarios",
+            [],
+        )
+
+        if not isinstance(
+            prediction_scenarios,
+            list,
+        ):
+            prediction_scenarios = []
+
+        historical_support = reasoning.get(
+            "historical_outcome_analysis",
+            {},
+        )
+
+        if not isinstance(
+            historical_support,
+            dict,
+        ):
+            historical_support = {}
 
         hypotheses: list[dict[str, Any]] = []
 
         # ----------------------------------------------------------
-        # Thermal / mechanical pattern
+        # Thermal + mechanical signal combination
         # ----------------------------------------------------------
 
-        thermal_signal = (
+        has_temperature = (
             "temperature_elevated"
             in signal_types
         )
 
-        vibration_signal = (
+        has_vibration = (
             "vibration_elevated"
             in signal_types
         )
 
-        energy_signal = (
+        has_energy = (
             "energy_increased"
             in signal_types
         )
 
-        production_signal = (
+        has_production = (
             "production_decreased"
             in signal_types
         )
 
-        if thermal_signal and vibration_signal:
+        if (
+            has_temperature
+            and has_vibration
+        ):
 
-            hypotheses.append({
-                "type": "thermal_mechanical_stress",
-                "priority": "high",
-                "confidence": "medium",
-                "machine_ids": correlated_machines,
-                "supporting_signals": [
-                    "temperature_elevated",
-                    "vibration_elevated",
-                ],
-                "description": (
-                    "Die Kombination aus erhöhter "
-                    "Temperatur und erhöhter Vibration "
-                    "deutet auf ein mögliches thermisch-"
-                    "mechanisches Belastungsmuster hin."
-                ),
-            })
-
-        # ----------------------------------------------------------
-        # Energy / efficiency pattern
-        # ----------------------------------------------------------
-
-        if energy_signal and production_signal:
-
-            hypotheses.append({
-                "type": "energy_efficiency_degradation",
-                "priority": "high",
-                "confidence": "medium",
-                "machine_ids": correlated_machines,
-                "supporting_signals": [
-                    "energy_increased",
-                    "production_decreased",
-                ],
-                "description": (
-                    "Ein erhöhter Energieverbrauch bei "
-                    "gleichzeitig reduziertem Produktionsoutput "
-                    "deutet auf eine mögliche Verschlechterung "
-                    "der betrieblichen Effizienz hin."
-                ),
-            })
+            hypotheses.append(
+                self._build_hypothesis(
+                    hypothesis_type=(
+                        "thermal_mechanical_stress"
+                    ),
+                    priority="high",
+                    confidence="medium",
+                    description=(
+                        "Die Kombination aus erhöhter "
+                        "Temperatur und erhöhter Vibration "
+                        "kann auf eine thermisch-mechanische "
+                        "Belastung hindeuten."
+                    ),
+                    signal_types=signal_types,
+                    correlated_machines=(
+                        correlated_machines
+                    ),
+                    prediction_scenarios=(
+                        prediction_scenarios
+                    ),
+                    historical_support=(
+                        historical_support
+                    ),
+                )
+            )
 
         # ----------------------------------------------------------
-        # Multi-signal machine pattern
+        # Energy + production signal combination
         # ----------------------------------------------------------
 
         if (
-            thermal_signal
-            and vibration_signal
-            and energy_signal
-            and production_signal
+            has_energy
+            and has_production
         ):
 
-            hypotheses.append({
-                "type": "multi_signal_machine_degradation",
-                "priority": "critical",
-                "confidence": "medium",
-                "machine_ids": correlated_machines,
-                "supporting_signals": [
-                    "temperature_elevated",
-                    "vibration_elevated",
-                    "energy_increased",
-                    "production_decreased",
-                ],
-                "description": (
-                    "Mehrere gleichzeitig auftretende "
-                    "Maschinensignale bilden ein konsistentes "
-                    "Muster einer möglichen Maschinen-"
-                    "verschlechterung."
-                ),
-            })
+            hypotheses.append(
+                self._build_hypothesis(
+                    hypothesis_type=(
+                        "energy_efficiency_degradation"
+                    ),
+                    priority="high",
+                    confidence="medium",
+                    description=(
+                        "Die Kombination aus erhöhtem "
+                        "Energieverbrauch und reduzierter "
+                        "Produktion kann auf eine mögliche "
+                        "Verschlechterung der Energieeffizienz "
+                        "hindeuten."
+                    ),
+                    signal_types=signal_types,
+                    correlated_machines=(
+                        correlated_machines
+                    ),
+                    prediction_scenarios=(
+                        prediction_scenarios
+                    ),
+                    historical_support=(
+                        historical_support
+                    ),
+                )
+            )
 
         # ----------------------------------------------------------
-        # Critical alarm pattern
+        # Multi-signal degradation
         # ----------------------------------------------------------
 
-        if "critical_alarm" in signal_types:
+        if (
+            has_temperature
+            and has_vibration
+            and has_energy
+            and has_production
+        ):
 
-            hypotheses.append({
-                "type": "critical_alarm_condition",
-                "priority": "critical",
-                "confidence": "medium",
-                "machine_ids": correlated_machines,
-                "supporting_signals": [
-                    "critical_alarm",
-                ],
-                "description": (
-                    "Ein kritischer Alarm stellt einen "
-                    "direkten Hinweis auf einen relevanten "
-                    "industriellen Zustand dar."
-                ),
-            })
+            hypotheses.append(
+                self._build_hypothesis(
+                    hypothesis_type=(
+                        "multi_signal_machine_degradation"
+                    ),
+                    priority="critical",
+                    confidence="medium",
+                    description=(
+                        "Die Kombination mehrerer "
+                        "korrelierter Betriebsabweichungen "
+                        "kann auf eine mögliche "
+                        "Maschinendegradation hindeuten."
+                    ),
+                    signal_types=signal_types,
+                    correlated_machines=(
+                        correlated_machines
+                    ),
+                    prediction_scenarios=(
+                        prediction_scenarios
+                    ),
+                    historical_support=(
+                        historical_support
+                    ),
+                )
+            )
 
         # ----------------------------------------------------------
-        # Result
+        # Critical alarm
+        # ----------------------------------------------------------
+
+        if anomaly_status == "critical_alarm":
+
+            hypotheses.append(
+                self._build_hypothesis(
+                    hypothesis_type=(
+                        "critical_alarm_condition"
+                    ),
+                    priority="critical",
+                    confidence="medium",
+                    description=(
+                        "Der kritische Alarmzustand "
+                        "erfordert eine weitere Untersuchung "
+                        "der zugrunde liegenden Ursache."
+                    ),
+                    signal_types=signal_types,
+                    correlated_machines=(
+                        correlated_machines
+                    ),
+                    prediction_scenarios=(
+                        prediction_scenarios
+                    ),
+                    historical_support=(
+                        historical_support
+                    ),
+                )
+            )
+
+        # ----------------------------------------------------------
+        # Fallback
         # ----------------------------------------------------------
 
         if not hypotheses:
 
-            result_status = "insufficient_signal"
-            primary_hypothesis = None
-
-        else:
-
-            result_status = "hypotheses_generated"
-
-            primary_hypothesis = (
-                self._select_primary_hypothesis(
-                    hypotheses
+            hypotheses.append(
+                self._build_hypothesis(
+                    hypothesis_type="insufficient_signal",
+                    priority="low",
+                    confidence="low",
+                    description=(
+                        "Es liegen nicht genügend "
+                        "korrelierte Signale für eine "
+                        "spezifische Root-Cause-Hypothese vor."
+                    ),
+                    signal_types=signal_types,
+                    correlated_machines=(
+                        correlated_machines
+                    ),
+                    prediction_scenarios=(
+                        prediction_scenarios
+                    ),
+                    historical_support=(
+                        historical_support
+                    ),
                 )
             )
+
+        primary_hypothesis = (
+            self._select_primary_hypothesis(
+                hypotheses
+            )
+        )
 
         self.analysis_count += 1
 
         result = {
             "version": self.VERSION,
-            "status": result_status,
+            "status": "analysis_completed",
             "analysis_id": self.analysis_count,
             "hypothesis_count": len(hypotheses),
             "primary_hypothesis": primary_hypothesis,
             "hypotheses": hypotheses,
-            "input_signal_types": sorted(
-                signal_types
-            ),
-            "correlated_machines": sorted(
-                correlated_machines
-            ),
+            "input_signal_types": signal_types,
+            "correlated_machines": correlated_machines,
         }
 
         self.last_analysis = result
 
         return result
+
+    def _build_hypothesis(
+        self,
+        hypothesis_type: str,
+        priority: str,
+        confidence: str,
+        description: str,
+        signal_types: list[str],
+        correlated_machines: list[Any],
+        prediction_scenarios: list[dict[str, Any]],
+        historical_support: dict[str, Any],
+    ) -> dict[str, Any]:
+
+        supporting_predictions = []
+
+        for scenario in prediction_scenarios:
+
+            if not isinstance(
+                scenario,
+                dict,
+            ):
+                continue
+
+            scenario_type = scenario.get(
+                "type"
+            )
+
+            if scenario_type in {
+                "potential_machine_degradation",
+                "potential_energy_persistence",
+                "potential_production_impact",
+                "potential_anomaly_persistence",
+                "machine_state_persistence",
+            }:
+                supporting_predictions.append(
+                    scenario_type
+                )
+
+        supporting_predictions = list(
+            dict.fromkeys(
+                supporting_predictions
+            )
+        )
+
+        evidence = self._build_evidence(
+            signal_types=signal_types,
+            correlated_machines=(
+                correlated_machines
+            ),
+            supporting_predictions=(
+                supporting_predictions
+            ),
+            historical_support=(
+                historical_support
+            ),
+        )
+
+        confidence_factors = []
+
+        if signal_types:
+            confidence_factors.append(
+                "supporting_signals_available"
+            )
+
+        if correlated_machines:
+            confidence_factors.append(
+                "correlated_machine_available"
+            )
+
+        if supporting_predictions:
+            confidence_factors.append(
+                "prediction_support_available"
+            )
+
+        historical_outcome_count = (
+            historical_support.get(
+                "known_outcome_count",
+                0,
+            )
+        )
+
+        historical_confidence = (
+            historical_support.get(
+                "average_confidence"
+            )
+        )
+
+        if (
+            historical_outcome_count > 0
+            and historical_confidence is not None
+        ):
+            confidence_factors.append(
+                "historical_support_available"
+            )
+
+        return {
+            "type": hypothesis_type,
+            "priority": priority,
+            "confidence": confidence,
+            "description": description,
+            "evidence": evidence,
+            "confidence_factors": (
+                confidence_factors
+            ),
+        }
+
+    @staticmethod
+    def _build_evidence(
+        signal_types: list[str],
+        correlated_machines: list[Any],
+        supporting_predictions: list[str],
+        historical_support: dict[str, Any],
+    ) -> dict[str, Any]:
+
+        known_outcome_count = (
+            historical_support.get(
+                "known_outcome_count",
+                0,
+            )
+        )
+
+        average_confidence = (
+            historical_support.get(
+                "average_confidence"
+            )
+        )
+
+        dominant_outcome = (
+            historical_support.get(
+                "dominant_outcome"
+            )
+        )
+
+        historical_available = (
+            known_outcome_count > 0
+            and average_confidence is not None
+        )
+
+        evidence_count = (
+            len(signal_types)
+            + len(correlated_machines)
+            + len(supporting_predictions)
+        )
+
+        if historical_available:
+            evidence_count += 1
+
+        if evidence_count >= 5:
+            evidence_strength = "strong"
+
+        elif evidence_count >= 3:
+            evidence_strength = "moderate"
+
+        elif evidence_count >= 1:
+            evidence_strength = "limited"
+
+        else:
+            evidence_strength = "none"
+
+        return {
+            "evidence_count": evidence_count,
+            "supporting_signals": signal_types,
+            "correlated_machines": (
+                correlated_machines
+            ),
+            "supporting_predictions": (
+                supporting_predictions
+            ),
+            "historical_support": (
+                historical_support
+                if historical_available
+                else "not_available"
+            ),
+            "historical_evidence_available": (
+                historical_available
+            ),
+            "historical_outcome_count": (
+                known_outcome_count
+            ),
+            "historical_average_confidence": (
+                average_confidence
+            ),
+            "historical_dominant_outcome": (
+                dominant_outcome
+            ),
+            "evidence_strength": evidence_strength,
+        }
+
+    def _select_primary_hypothesis(
+        self,
+        hypotheses: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+
+        if not hypotheses:
+            return {}
+
+        return max(
+            hypotheses,
+            key=lambda hypothesis: self.PRIORITY_ORDER.get(
+                hypothesis.get(
+                    "priority",
+                    "low",
+                ),
+                0,
+            ),
+        )
 
     def get_status(
         self,
