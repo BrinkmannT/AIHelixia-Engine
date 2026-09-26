@@ -1,7 +1,7 @@
 """
 AIHelixia Intelligence Engine
 Root Cause Analysis Layer
-Version: 0.3.0
+Version: 0.3.1
 """
 
 from __future__ import annotations
@@ -18,6 +18,7 @@ class RootCause:
     - Prediction-Ergebnisse auswerten
     - mögliche Ursachenhypothesen erzeugen
     - Evidence strukturiert an Hypothesen binden
+    - historische Unterstützung qualitativ bewerten
     - qualitative Confidence ableiten
     - primäre Hypothese bestimmen
 
@@ -26,7 +27,7 @@ class RootCause:
     und später mit realen Daten validiert werden.
     """
 
-    VERSION = "0.3.0"
+    VERSION = "0.3.1"
 
     PRIORITY_ORDER = {
         "critical": 4,
@@ -82,10 +83,6 @@ class RootCause:
             "status"
         )
 
-        anomaly_severity = anomaly_analysis.get(
-            "severity"
-        )
-
         signals = anomaly_analysis.get(
             "signals",
             [],
@@ -128,22 +125,16 @@ class RootCause:
         ):
             prediction_scenarios = []
 
-        historical_support = reasoning.get(
-            "historical_outcome_analysis",
-            {},
+        historical_support = (
+            self._analyze_historical_support(
+                reasoning.get(
+                    "historical_outcome_analysis",
+                    {},
+                )
+            )
         )
 
-        if not isinstance(
-            historical_support,
-            dict,
-        ):
-            historical_support = {}
-
         hypotheses: list[dict[str, Any]] = []
-
-        # ----------------------------------------------------------
-        # Thermal + mechanical signal combination
-        # ----------------------------------------------------------
 
         has_temperature = (
             "temperature_elevated"
@@ -164,6 +155,10 @@ class RootCause:
             "production_decreased"
             in signal_types
         )
+
+        # ----------------------------------------------------------
+        # Thermal + mechanical signal combination
+        # ----------------------------------------------------------
 
         if (
             has_temperature
@@ -346,11 +341,89 @@ class RootCause:
             "hypotheses": hypotheses,
             "input_signal_types": signal_types,
             "correlated_machines": correlated_machines,
+            "historical_support": historical_support,
         }
 
         self.last_analysis = result
 
         return result
+
+    @staticmethod
+    def _analyze_historical_support(
+        historical: Any,
+    ) -> dict[str, Any]:
+
+        if not isinstance(
+            historical,
+            dict,
+        ):
+            historical = {}
+
+        known_outcome_count = historical.get(
+            "known_outcome_count",
+            0,
+        )
+
+        average_confidence = historical.get(
+            "average_confidence"
+        )
+
+        dominant_outcome = historical.get(
+            "dominant_outcome"
+        )
+
+        success_rate = historical.get(
+            "success_rate"
+        )
+
+        improved_count = historical.get(
+            "improved_count",
+            0,
+        )
+
+        degraded_count = historical.get(
+            "degraded_count",
+            0,
+        )
+
+        unchanged_count = historical.get(
+            "unchanged_count",
+            0,
+        )
+
+        if not isinstance(
+            known_outcome_count,
+            int,
+        ):
+            known_outcome_count = 0
+
+        if known_outcome_count <= 0:
+            status = "not_available"
+            strength = "none"
+
+        elif (
+            average_confidence is not None
+            and average_confidence >= 0.75
+            and known_outcome_count >= 3
+        ):
+            status = "available"
+            strength = "strong"
+
+        else:
+            status = "limited"
+            strength = "limited"
+
+        return {
+            "status": status,
+            "strength": strength,
+            "known_outcome_count": known_outcome_count,
+            "average_confidence": average_confidence,
+            "dominant_outcome": dominant_outcome,
+            "success_rate": success_rate,
+            "improved_count": improved_count,
+            "degraded_count": degraded_count,
+            "unchanged_count": unchanged_count,
+        }
 
     def _build_hypothesis(
         self,
@@ -425,22 +498,11 @@ class RootCause:
                 "prediction_support_available"
             )
 
-        historical_outcome_count = (
-            historical_support.get(
-                "known_outcome_count",
-                0,
-            )
-        )
-
-        historical_confidence = (
-            historical_support.get(
-                "average_confidence"
-            )
-        )
-
         if (
-            historical_outcome_count > 0
-            and historical_confidence is not None
+            historical_support.get(
+                "status"
+            )
+            == "available"
         ):
             confidence_factors.append(
                 "historical_support_available"
@@ -452,6 +514,7 @@ class RootCause:
             "confidence": confidence,
             "description": description,
             "evidence": evidence,
+            "historical_support": historical_support,
             "confidence_factors": (
                 confidence_factors
             ),
@@ -465,28 +528,11 @@ class RootCause:
         historical_support: dict[str, Any],
     ) -> dict[str, Any]:
 
-        known_outcome_count = (
-            historical_support.get(
-                "known_outcome_count",
-                0,
-            )
-        )
-
-        average_confidence = (
-            historical_support.get(
-                "average_confidence"
-            )
-        )
-
-        dominant_outcome = (
-            historical_support.get(
-                "dominant_outcome"
-            )
-        )
-
         historical_available = (
-            known_outcome_count > 0
-            and average_confidence is not None
+            historical_support.get(
+                "status"
+            )
+            == "available"
         )
 
         evidence_count = (
@@ -528,13 +574,20 @@ class RootCause:
                 historical_available
             ),
             "historical_outcome_count": (
-                known_outcome_count
+                historical_support.get(
+                    "known_outcome_count",
+                    0,
+                )
             ),
             "historical_average_confidence": (
-                average_confidence
+                historical_support.get(
+                    "average_confidence"
+                )
             ),
             "historical_dominant_outcome": (
-                dominant_outcome
+                historical_support.get(
+                    "dominant_outcome"
+                )
             ),
             "evidence_strength": evidence_strength,
         }
