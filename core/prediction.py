@@ -1,7 +1,7 @@
 """
 AIHelixia Intelligence Engine
 Prediction Layer
-Version: 0.9.0
+Version: 0.9.1
 """
 
 from __future__ import annotations
@@ -18,7 +18,8 @@ class Prediction:
     - Reasoning-Ergebnis berücksichtigen
     - industrielle Anomalien berücksichtigen
     - zukünftige Szenarien deterministisch erzeugen
-    - Evidence strukturiert erfassen
+    - aktuelle Evidence strukturiert erfassen
+    - historische Evidence aus Reasoning berücksichtigen
     - qualitative Confidence aus vorhandener Evidenz ableiten
     - beobachteten Zustand klar von einer Prediction trennen
 
@@ -27,7 +28,7 @@ class Prediction:
     Keine LLM-Abhängigkeit.
     """
 
-    VERSION = "0.9.0"
+    VERSION = "0.9.1"
 
     def __init__(self) -> None:
         self.status = "created"
@@ -93,13 +94,23 @@ class Prediction:
             )
         )
 
+        historical_support = (
+            self._extract_historical_support(
+                reasoning
+            )
+        )
+
         scenarios = [
-            self._attach_evidence(scenario)
+            self._attach_evidence(
+                scenario=scenario,
+                historical_support=historical_support,
+            )
             for scenario in scenarios
         ]
 
         evidence_summary = self._build_evidence_summary(
             scenarios=scenarios,
+            historical_support=historical_support,
         )
 
         self.prediction_count += 1
@@ -110,6 +121,7 @@ class Prediction:
             "prediction_id": self.prediction_count,
             "scenario_count": len(scenarios),
             "scenarios": scenarios,
+            "historical_support": historical_support,
             "evidence_summary": evidence_summary,
         }
 
@@ -512,8 +524,89 @@ class Prediction:
         return scenarios
 
     @staticmethod
+    def _extract_historical_support(
+        reasoning: dict[str, Any],
+    ) -> dict[str, Any]:
+
+        historical = reasoning.get(
+            "historical_outcome_analysis",
+            {},
+        )
+
+        if not isinstance(
+            historical,
+            dict,
+        ):
+            return {
+                "status": "not_available",
+                "known_outcome_count": 0,
+                "average_confidence": None,
+                "dominant_outcome": None,
+                "success_rate": None,
+                "improved_count": 0,
+                "degraded_count": 0,
+                "unchanged_count": 0,
+            }
+
+        known_outcome_count = historical.get(
+            "known_outcome_count",
+            0,
+        )
+
+        average_confidence = historical.get(
+            "average_confidence"
+        )
+
+        dominant_outcome = historical.get(
+            "dominant_outcome"
+        )
+
+        success_rate = historical.get(
+            "success_rate"
+        )
+
+        improved_count = historical.get(
+            "improved_count",
+            0,
+        )
+
+        degraded_count = historical.get(
+            "degraded_count",
+            0,
+        )
+
+        unchanged_count = historical.get(
+            "unchanged_count",
+            0,
+        )
+
+        if known_outcome_count <= 0:
+            status = "not_available"
+
+        elif (
+            average_confidence is not None
+            and average_confidence >= 0.75
+        ):
+            status = "available"
+
+        else:
+            status = "limited"
+
+        return {
+            "status": status,
+            "known_outcome_count": known_outcome_count,
+            "average_confidence": average_confidence,
+            "dominant_outcome": dominant_outcome,
+            "success_rate": success_rate,
+            "improved_count": improved_count,
+            "degraded_count": degraded_count,
+            "unchanged_count": unchanged_count,
+        }
+
+    @staticmethod
     def _attach_evidence(
         scenario: dict[str, Any],
+        historical_support: dict[str, Any],
     ) -> dict[str, Any]:
 
         trigger_signals = scenario.get(
@@ -521,7 +614,10 @@ class Prediction:
             [],
         )
 
-        if not isinstance(trigger_signals, list):
+        if not isinstance(
+            trigger_signals,
+            list,
+        ):
             trigger_signals = []
 
         correlated_machines = scenario.get(
@@ -530,6 +626,7 @@ class Prediction:
         )
 
         if correlated_machines:
+
             if not isinstance(
                 correlated_machines,
                 list,
@@ -537,6 +634,7 @@ class Prediction:
                 correlated_machines = [
                     correlated_machines
                 ]
+
         else:
             correlated_machines = []
 
@@ -552,14 +650,36 @@ class Prediction:
             )
         )
 
-        evidence_count = len(
-            supporting_signals
-        ) + len(
-            correlated_machines
+        evidence_count = (
+            len(supporting_signals)
+            + len(correlated_machines)
         )
 
         if source:
             evidence_count += 1
+
+        historical_status = historical_support.get(
+            "status",
+            "not_available",
+        )
+
+        historical_outcome_count = historical_support.get(
+            "known_outcome_count",
+            0,
+        )
+
+        historical_confidence = historical_support.get(
+            "average_confidence"
+        )
+
+        historical_evidence_available = (
+            historical_status
+            in {
+                "available",
+                "limited",
+            }
+            and historical_outcome_count > 0
+        )
 
         confidence = scenario.get(
             "confidence",
@@ -583,6 +703,11 @@ class Prediction:
                 "correlated_machine_available"
             )
 
+        if historical_evidence_available:
+            confidence_factors.append(
+                "historical_support_available"
+            )
+
         if evidence_count >= 3:
             evidence_strength = "strong"
 
@@ -599,7 +724,20 @@ class Prediction:
             "evidence_count": evidence_count,
             "supporting_signals": supporting_signals,
             "correlated_machines": correlated_machines,
-            "historical_support": "not_available",
+            "historical_support": (
+                historical_support
+                if historical_evidence_available
+                else "not_available"
+            ),
+            "historical_evidence_available": (
+                historical_evidence_available
+            ),
+            "historical_outcome_count": (
+                historical_outcome_count
+            ),
+            "historical_average_confidence": (
+                historical_confidence
+            ),
             "confidence_level": confidence,
             "confidence_factors": confidence_factors,
             "evidence_strength": evidence_strength,
@@ -610,6 +748,7 @@ class Prediction:
     @staticmethod
     def _build_evidence_summary(
         scenarios: list[dict[str, Any]],
+        historical_support: dict[str, Any],
     ) -> dict[str, Any]:
 
         evidence_count = 0
@@ -623,6 +762,8 @@ class Prediction:
             "medium": 0,
             "high": 0,
         }
+
+        historical_supported_scenarios = 0
 
         for scenario in scenarios:
 
@@ -654,6 +795,12 @@ class Prediction:
             else:
                 none_count += 1
 
+            if evidence.get(
+                "historical_evidence_available",
+                False,
+            ):
+                historical_supported_scenarios += 1
+
             confidence = scenario.get(
                 "confidence",
                 "low",
@@ -670,7 +817,10 @@ class Prediction:
             "limited_evidence_scenarios": limited_count,
             "no_evidence_scenarios": none_count,
             "confidence_levels": confidence_levels,
-            "historical_support": "not_available",
+            "historical_support": historical_support,
+            "historical_supported_scenarios": (
+                historical_supported_scenarios
+            ),
         }
 
     @staticmethod
