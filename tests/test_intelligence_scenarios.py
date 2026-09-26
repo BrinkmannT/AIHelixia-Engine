@@ -1,12 +1,15 @@
 """
 AIHelixia Intelligence Engine
-Intelligence Scenario Test V0.4
+Intelligence Scenario Regression Tests
+Version: 1.0.0
 """
 
 from __future__ import annotations
 
 import tempfile
 from pathlib import Path
+
+import pytest
 
 from engine import AIHelixiaEngine
 
@@ -169,15 +172,8 @@ def build_input(scenario: str) -> dict:
 
 def build_observed_state(scenario: str) -> tuple[dict, dict]:
     """
-    Erstellt vorherigen und beobachteten Zustand für
-    den Outcome-Learning-Test.
-
-    Die Szenarien bilden unterschiedliche Outcomes ab:
-    - normal → unchanged
-    - light_anomaly → improved
-    - thermal_mechanical → improved
-    - critical_multi_signal → degraded
-    - critical_alarm → unknown
+    Erstellt vorherigen und beobachteten Zustand
+    für den Outcome-Learning-Test.
     """
 
     previous = {
@@ -244,12 +240,51 @@ SCENARIOS = [
 ]
 
 
-def run_scenario(scenario: str) -> dict:
-    """
-    Führt das Szenario mit einer eigenen temporären
-    Persistence-Datenbank aus.
-    """
+EXPECTED = {
+    "normal": {
+        "outcome": "unchanged",
+        "outcome_success": False,
+        "outcome_evaluation": "unchanged",
+        "outcome_known": True,
+        "feedback": "neutral",
+        "signal": "review",
+    },
+    "light_anomaly": {
+        "outcome": "improved",
+        "outcome_success": True,
+        "outcome_evaluation": "successful",
+        "outcome_known": True,
+        "feedback": "positive",
+        "signal": "reinforce",
+    },
+    "thermal_mechanical": {
+        "outcome": "improved",
+        "outcome_success": True,
+        "outcome_evaluation": "successful",
+        "outcome_known": True,
+        "feedback": "positive",
+        "signal": "reinforce",
+    },
+    "critical_multi_signal": {
+        "outcome": "degraded",
+        "outcome_success": False,
+        "outcome_evaluation": "unsuccessful",
+        "outcome_known": True,
+        "feedback": "negative",
+        "signal": "adjust",
+    },
+    "critical_alarm": {
+        "outcome": "unknown",
+        "outcome_success": None,
+        "outcome_evaluation": "execution_success_outcome_unknown",
+        "outcome_known": False,
+        "feedback": "pending",
+        "signal": "review",
+    },
+}
 
+
+def run_scenario(scenario: str) -> dict:
     with tempfile.TemporaryDirectory(
         prefix=f"aihelixia_{scenario}_"
     ) as temp_dir:
@@ -278,6 +313,7 @@ def run_scenario(scenario: str) -> dict:
             decision = result["decision"]
             evaluation = result["evaluation"]
             feedback = result["feedback"]
+            action = result["action"]
 
             primary = root_cause.get(
                 "primary_hypothesis"
@@ -295,87 +331,47 @@ def run_scenario(scenario: str) -> dict:
                 else None
             )
 
-            # -----------------------------------------------------
-            # Outcome Learning
-            # -----------------------------------------------------
-
             previous_state, observed_state = (
                 build_observed_state(scenario)
             )
 
-            action_result = result["action"]
-
             outcome_result = engine.evaluate_outcome(
                 previous_state=previous_state,
                 observed_state=observed_state,
-                action_result=action_result,
+                action_result=action,
             )
 
             outcome = outcome_result["outcome"]
             outcome_evaluation = outcome_result["evaluation"]
             outcome_feedback = outcome_result["feedback"]
+            learning_memory = outcome_result["learning_memory"]
 
             return {
                 "scenario": scenario,
-
-                "anomaly": anomaly.get(
-                    "status"
-                ),
-
-                "severity": anomaly.get(
-                    "severity"
-                ),
-
+                "anomaly": anomaly.get("status"),
+                "severity": anomaly.get("severity"),
                 "root_cause": primary_type,
-
                 "priority": primary_priority,
-
-                "decision": decision.get(
-                    "decision_type"
-                ),
-
-                "action": decision.get(
-                    "action"
-                ),
-
-                "evaluation": evaluation.get(
-                    "evaluation"
-                ),
-
-                "outcome": outcome.get(
-                    "outcome"
-                ),
-
-                "outcome_success": outcome.get(
-                    "success"
-                ),
-
-                "outcome_confidence": outcome.get(
-                    "confidence"
-                ),
-
+                "decision": decision.get("decision_type"),
+                "action": action.get("action"),
+                "evaluation": evaluation.get("evaluation"),
+                "outcome": outcome.get("outcome"),
+                "outcome_success": outcome.get("success"),
+                "outcome_confidence": outcome.get("confidence"),
                 "outcome_evaluation": outcome_evaluation.get(
                     "evaluation"
                 ),
-
                 "outcome_known": outcome_evaluation.get(
                     "outcome_known"
                 ),
-
-                "feedback": feedback.get(
+                "feedback": outcome_feedback.get(
                     "feedback_type"
                 ),
-
-                "signal": feedback.get(
+                "signal": outcome_feedback.get(
                     "signal"
                 ),
-
-                "outcome_feedback": outcome_feedback.get(
-                    "feedback_type"
-                ),
-
-                "outcome_signal": outcome_feedback.get(
-                    "signal"
+                "learning_memory_type": learning_memory.get(
+                    "type"
                 ),
             }
 
@@ -383,84 +379,39 @@ def run_scenario(scenario: str) -> dict:
             engine.stop()
 
 
-if __name__ == "__main__":
+@pytest.mark.parametrize("scenario", SCENARIOS)
+def test_intelligence_scenario_regression(scenario: str) -> None:
+    result = run_scenario(scenario)
+    expected = EXPECTED[scenario]
 
-    print()
-    print("AIHELIXIA INTELLIGENCE SCENARIOS V0.4")
-    print("======================================")
+    assert result["outcome"] == expected["outcome"]
+    assert (
+        result["outcome_success"]
+        == expected["outcome_success"]
+    )
+    assert (
+        result["outcome_evaluation"]
+        == expected["outcome_evaluation"]
+    )
+    assert (
+        result["outcome_known"]
+        == expected["outcome_known"]
+    )
+    assert result["feedback"] == expected["feedback"]
+    assert result["signal"] == expected["signal"]
 
-    for scenario in SCENARIOS:
+    assert result["outcome_confidence"] >= 0.0
+    assert result["learning_memory_type"] == "outcome_learning"
 
-        result = run_scenario(scenario)
 
-        print()
-        print(result["scenario"])
-        print("-" * len(result["scenario"]))
+def test_all_regression_scenarios_execute() -> None:
+    results = [
+        run_scenario(scenario)
+        for scenario in SCENARIOS
+    ]
 
-        print(
-            "Anomaly:",
-            result["anomaly"],
-        )
-
-        print(
-            "Severity:",
-            result["severity"],
-        )
-
-        print(
-            "Root Cause:",
-            result["root_cause"],
-        )
-
-        print(
-            "Priority:",
-            result["priority"],
-        )
-
-        print(
-            "Decision:",
-            result["decision"],
-        )
-
-        print(
-            "Action:",
-            result["action"],
-        )
-
-        print(
-            "Outcome:",
-            result["outcome"],
-        )
-
-        print(
-            "Outcome Success:",
-            result["outcome_success"],
-        )
-
-        print(
-            "Outcome Confidence:",
-            result["outcome_confidence"],
-        )
-
-        print(
-            "Outcome Evaluation:",
-            result["outcome_evaluation"],
-        )
-
-        print(
-            "Outcome Known:",
-            result["outcome_known"],
-        )
-
-        print(
-            "Feedback:",
-            result["outcome_feedback"],
-        )
-
-        print(
-            "Learning Signal:",
-            result["outcome_signal"],
-        )
-
-    print()
-    print("SCENARIO TEST COMPLETE")
+    assert len(results) == 5
+    assert {
+        result["scenario"]
+        for result in results
+    } == set(SCENARIOS)
