@@ -1,7 +1,7 @@
 """
 AIHelixia Intelligence Engine
 REST API
-Version: 0.1.0
+Version: 0.2.0
 """
 
 from __future__ import annotations
@@ -10,19 +10,24 @@ from typing import Any
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel, Field
 
 from engine import AIHelixiaEngine
 from factoryiq.pilot import FactoryIQPilot
 
 
-VERSION = "0.1.0"
+VERSION = "0.2.0"
 
 
 app = FastAPI(
     title="AIHelixia Intelligence Engine API",
     version=VERSION,
-    description="REST API für die AIHelixia Intelligence Engine und FactoryIQ.",
+    description=(
+        "REST API für die AIHelixia Intelligence Engine "
+        "und FactoryIQ."
+    ),
 )
+
 
 app.add_middleware(
     CORSMiddleware,
@@ -40,10 +45,55 @@ engine = AIHelixiaEngine()
 pilot = FactoryIQPilot(engine)
 
 
+# ----------------------------------------------------------------------
+# API Models
+# ----------------------------------------------------------------------
+
+
+class OutcomeRequest(BaseModel):
+    """
+    Request für die nachgelagerte Outcome-Bewertung.
+
+    previous_state:
+        Zustand vor der Action.
+
+    observed_state:
+        Beobachteter Zustand nach der Action.
+
+    action_result:
+        Ergebnis der zuvor ausgeführten Action.
+    """
+
+    previous_state: dict[str, Any] = Field(
+        ...,
+        description="Zustand vor der ausgeführten Action.",
+    )
+
+    observed_state: dict[str, Any] = Field(
+        ...,
+        description="Beobachteter Zustand nach der Action.",
+    )
+
+    action_result: dict[str, Any] = Field(
+        ...,
+        description="Ergebnis der ausgeführten Action.",
+    )
+
+
+# ----------------------------------------------------------------------
+# Helpers
+# ----------------------------------------------------------------------
+
+
 def ensure_persistence() -> None:
     """Stellt sicher, dass Persistence verfügbar ist."""
     if engine.persistence.status != "running":
         engine.persistence.start()
+
+
+# ----------------------------------------------------------------------
+# Core
+# ----------------------------------------------------------------------
 
 
 @app.get("/")
@@ -54,57 +104,6 @@ def root() -> dict[str, Any]:
         "engine_version": engine.VERSION,
         "status": "online",
     }
-
-
-@app.get("/factory/overview")
-@app.get("/factory/intelligence")
-@app.get("/factory/dashboard")
-def factory_dashboard() -> dict[str, Any]:
-    try:
-        if engine.status != "running":
-            raise HTTPException(
-                status_code=409,
-                detail="Engine ist nicht gestartet.",
-            )
-
-        return pilot.build_dashboard()
-
-    except HTTPException:
-        raise
-    except Exception as exc:
-        raise HTTPException(
-            status_code=500,
-            detail=str(exc),
-        ) from exc
-
-
-def factory_intelligence() -> dict[str, Any]:
-    try:
-        if engine.status != "running":
-            raise HTTPException(
-                status_code=409,
-                detail="Engine ist nicht gestartet.",
-            )
-
-        return pilot.build_intelligence()
-
-    except HTTPException:
-        raise
-    except Exception as exc:
-        raise HTTPException(
-            status_code=500,
-            detail=str(exc),
-        ) from exc
-
-
-def factory_overview() -> dict[str, Any]:
-    try:
-        return pilot.build_overview()
-    except Exception as exc:
-        raise HTTPException(
-            status_code=500,
-            detail=str(exc),
-        ) from exc
 
 
 @app.get("/health")
@@ -119,6 +118,11 @@ def health() -> dict[str, Any]:
 @app.get("/status")
 def status() -> dict[str, Any]:
     return engine.get_status()
+
+
+# ----------------------------------------------------------------------
+# Engine lifecycle
+# ----------------------------------------------------------------------
 
 
 @app.post("/engine/start")
@@ -155,6 +159,34 @@ def stop_engine() -> dict[str, Any]:
         ) from exc
 
 
+# ----------------------------------------------------------------------
+# Factory
+# ----------------------------------------------------------------------
+
+
+@app.get("/factory/overview")
+@app.get("/factory/intelligence")
+@app.get("/factory/dashboard")
+def factory_dashboard() -> dict[str, Any]:
+    try:
+        if engine.status != "running":
+            raise HTTPException(
+                status_code=409,
+                detail="Engine ist nicht gestartet.",
+            )
+
+        return pilot.build_dashboard()
+
+    except HTTPException:
+        raise
+
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=str(exc),
+        ) from exc
+
+
 @app.post("/factory/ingest")
 def ingest_factory(
     factory_data: dict[str, Any],
@@ -166,41 +198,9 @@ def ingest_factory(
                 detail="Engine ist nicht gestartet.",
             )
 
-        result = engine.ingest_factory_data(factory_data)
-
-        return {
-            "status": "processed",
-            "result": result,
-        }
-
-    except HTTPException:
-        raise
-
-    except ValueError as exc:
-        raise HTTPException(
-            status_code=400,
-            detail=str(exc),
-        ) from exc
-
-    except Exception as exc:
-        raise HTTPException(
-            status_code=500,
-            detail=str(exc),
-        ) from exc
-
-
-@app.post("/process")
-def process(
-    input_data: dict[str, Any],
-) -> dict[str, Any]:
-    try:
-        if engine.status != "running":
-            raise HTTPException(
-                status_code=409,
-                detail="Engine ist nicht gestartet.",
-            )
-
-        result = engine.process(input_data)
+        result = engine.ingest_factory_data(
+            factory_data
+        )
 
         return {
             "status": "processed",
@@ -260,8 +260,110 @@ def process_factory(
 
 
 # ----------------------------------------------------------------------
+# Intelligence
+# ----------------------------------------------------------------------
+
+
+@app.post("/process")
+def process(
+    input_data: dict[str, Any],
+) -> dict[str, Any]:
+    try:
+        if engine.status != "running":
+            raise HTTPException(
+                status_code=409,
+                detail="Engine ist nicht gestartet.",
+            )
+
+        result = engine.process(
+            input_data
+        )
+
+        return {
+            "status": "processed",
+            "result": result,
+        }
+
+    except HTTPException:
+        raise
+
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail=str(exc),
+        ) from exc
+
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=str(exc),
+        ) from exc
+
+
+@app.post("/outcome")
+def evaluate_outcome(
+    request: OutcomeRequest,
+) -> dict[str, Any]:
+    """
+    Schließt den Intelligence Closed Loop.
+
+    Action
+        ↓
+    Observed State
+        ↓
+    Outcome
+        ↓
+    Evaluation
+        ↓
+    Feedback
+        ↓
+    Outcome Learning
+    """
+
+    try:
+        if engine.status != "running":
+            raise HTTPException(
+                status_code=409,
+                detail="Engine ist nicht gestartet.",
+            )
+
+        result = engine.evaluate_outcome(
+            previous_state=request.previous_state,
+            observed_state=request.observed_state,
+            action_result=request.action_result,
+        )
+
+        return {
+            "status": "evaluated",
+            "result": result,
+        }
+
+    except HTTPException:
+        raise
+
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail=str(exc),
+        ) from exc
+
+    except TypeError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail=str(exc),
+        ) from exc
+
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=str(exc),
+        ) from exc
+
+
+# ----------------------------------------------------------------------
 # Persistence
 # ----------------------------------------------------------------------
+
 
 @app.get("/history/{table}")
 def history(
