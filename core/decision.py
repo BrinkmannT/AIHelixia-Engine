@@ -1,7 +1,7 @@
 """
 AIHelixia Intelligence Engine
 Decision Layer
-Version: 0.5.0
+Version: 0.5.1
 """
 
 from __future__ import annotations
@@ -17,22 +17,26 @@ class Decision:
     - Reasoning-Ergebnisse auswerten
     - Predictions berücksichtigen
     - Root-Cause-Ergebnisse berücksichtigen
+    - Evidence berücksichtigen
+    - Historical Support berücksichtigen
     - Learning Signals berücksichtigen
     - strukturierten nächsten Schritt bestimmen
     - noch keine externe Aktion ausführen
 
-    V0.5.0:
+    V0.5.1:
     - deterministisch
     - reproduzierbar
     - Memory-aware
     - Feedback-aware
     - Learning Signal-aware
     - Root-Cause-aware
+    - Evidence-aware
+    - Historical-Support-aware
     - keine LLM-Abhängigkeit
     - keine externe Aktion
     """
 
-    VERSION = "0.5.0"
+    VERSION = "0.5.1"
 
     def __init__(self) -> None:
         self.status = "created"
@@ -55,7 +59,8 @@ class Decision:
     ) -> dict[str, Any]:
         """
         Erzeugt eine strukturierte Entscheidung auf Basis
-        von Reasoning, Prediction, Root Cause und Learning Signal.
+        von Reasoning, Prediction, Root Cause, Evidence,
+        Historical Support und Learning Signal.
         """
 
         if self.status != "running":
@@ -92,12 +97,21 @@ class Decision:
             [],
         )
 
+        if not isinstance(
+            scenarios,
+            list,
+        ):
+            scenarios = []
+
         learning_signal = reasoning.get(
             "learning_signal",
             {},
         )
 
-        if not isinstance(learning_signal, dict):
+        if not isinstance(
+            learning_signal,
+            dict,
+        ):
             raise TypeError(
                 "Learning Signal muss ein Dictionary sein."
             )
@@ -119,9 +133,16 @@ class Decision:
         root_cause_status = "not_available"
         root_cause_priority = "none"
         root_cause_type = None
+        root_cause_confidence = None
         root_cause_hypothesis_count = 0
 
-        if isinstance(root_cause, dict):
+        root_cause_evidence: dict[str, Any] = {}
+        root_cause_historical_support: dict[str, Any] = {}
+
+        if isinstance(
+            root_cause,
+            dict,
+        ):
 
             root_cause_status = root_cause.get(
                 "status",
@@ -138,15 +159,121 @@ class Decision:
                 {},
             )
 
-            if isinstance(primary_hypothesis, dict):
-                root_cause_priority = primary_hypothesis.get(
-                    "priority",
-                    "none",
+            if isinstance(
+                primary_hypothesis,
+                dict,
+            ):
+
+                root_cause_priority = (
+                    primary_hypothesis.get(
+                        "priority",
+                        "none",
+                    )
                 )
 
-                root_cause_type = primary_hypothesis.get(
-                    "type"
+                root_cause_type = (
+                    primary_hypothesis.get(
+                        "type"
+                    )
                 )
+
+                root_cause_confidence = (
+                    primary_hypothesis.get(
+                        "confidence"
+                    )
+                )
+
+                primary_evidence = (
+                    primary_hypothesis.get(
+                        "evidence",
+                        {},
+                    )
+                )
+
+                if isinstance(
+                    primary_evidence,
+                    dict,
+                ):
+                    root_cause_evidence = (
+                        primary_evidence
+                    )
+
+                historical_support = (
+                    primary_hypothesis.get(
+                        "historical_support",
+                        {},
+                    )
+                )
+
+                if isinstance(
+                    historical_support,
+                    dict,
+                ):
+                    root_cause_historical_support = (
+                        historical_support
+                    )
+
+        # ---------------------------------------------------------
+        # Evidence Summary
+        # ---------------------------------------------------------
+
+        evidence_count = root_cause_evidence.get(
+            "evidence_count",
+            0,
+        )
+
+        evidence_strength = root_cause_evidence.get(
+            "evidence_strength",
+            "none",
+        )
+
+        supporting_signals = root_cause_evidence.get(
+            "supporting_signals",
+            [],
+        )
+
+        correlated_machines = root_cause_evidence.get(
+            "correlated_machines",
+            [],
+        )
+
+        supporting_predictions = root_cause_evidence.get(
+            "supporting_predictions",
+            [],
+        )
+
+        historical_status = (
+            root_cause_historical_support.get(
+                "status",
+                "not_available",
+            )
+        )
+
+        historical_strength = (
+            root_cause_historical_support.get(
+                "strength",
+                "none",
+            )
+        )
+
+        historical_outcome_count = (
+            root_cause_historical_support.get(
+                "known_outcome_count",
+                0,
+            )
+        )
+
+        historical_average_confidence = (
+            root_cause_historical_support.get(
+                "average_confidence"
+            )
+        )
+
+        historical_dominant_outcome = (
+            root_cause_historical_support.get(
+                "dominant_outcome"
+            )
+        )
 
         # ---------------------------------------------------------
         # Decision Logic
@@ -163,7 +290,11 @@ class Decision:
             )
 
         elif (
-            root_cause_status == "hypotheses_generated"
+            root_cause_status
+            in {
+                "analysis_completed",
+                "hypotheses_generated",
+            }
             and root_cause_priority == "critical"
         ):
 
@@ -178,7 +309,11 @@ class Decision:
             )
 
         elif (
-            root_cause_status == "hypotheses_generated"
+            root_cause_status
+            in {
+                "analysis_completed",
+                "hypotheses_generated",
+            }
             and root_cause_priority == "high"
             and learning_type == "adjust"
         ):
@@ -248,6 +383,31 @@ class Decision:
                 "für eine weitere Entscheidung bestimmt werden."
             )
 
+        # ---------------------------------------------------------
+        # Structured Evidence
+        # ---------------------------------------------------------
+
+        evidence = {
+            "evidence_count": evidence_count,
+            "evidence_strength": evidence_strength,
+            "supporting_signals": supporting_signals,
+            "correlated_machines": correlated_machines,
+            "supporting_predictions": supporting_predictions,
+            "historical_support": {
+                "status": historical_status,
+                "strength": historical_strength,
+                "known_outcome_count": (
+                    historical_outcome_count
+                ),
+                "average_confidence": (
+                    historical_average_confidence
+                ),
+                "dominant_outcome": (
+                    historical_dominant_outcome
+                ),
+            },
+        }
+
         return {
             "status": "decided",
             "version": self.VERSION,
@@ -260,7 +420,9 @@ class Decision:
                 "hypothesis_count": root_cause_hypothesis_count,
                 "primary_type": root_cause_type,
                 "priority": root_cause_priority,
+                "confidence": root_cause_confidence,
             },
+            "evidence": evidence,
             "learning_signal": {
                 "type": learning_type,
                 "priority": learning_priority,
