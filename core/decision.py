@@ -117,7 +117,7 @@ class Decision:
             )
 
         learning_type = learning_signal.get(
-            "type",
+            "action",
             "review",
         )
 
