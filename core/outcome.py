@@ -1,7 +1,7 @@
 """
 AIHelixia Intelligence Engine
 Outcome Layer
-Version: 0.1.0
+Version: 0.2.0
 """
 
 from __future__ import annotations
@@ -16,14 +16,16 @@ class Outcome:
     Die Outcome-Schicht vergleicht einen vorherigen Zustand
     mit einem beobachteten Zustand.
 
-    V0.1.0:
+    V0.2.0:
     - deterministisch
     - reproduzierbar
     - keine LLM-Abhängigkeit
     - keine automatische Maschinensteuerung
+    - industrielle Kennzahlen
+    - wirtschaftliche Kennzahlen
     """
 
-    VERSION = "0.1.0"
+    VERSION = "0.2.0"
 
     def __init__(self) -> None:
         self.status = "created"
@@ -55,11 +57,17 @@ class Outcome:
         - Produktion
         - Energie
 
+        Unterstützte wirtschaftliche Kennzahlen:
+
+        - Actual Cost
+
         Niedrigere Temperatur/Vibration werden als Verbesserung
         betrachtet.
 
         Höhere Produktion und niedrigere Energie werden als
         Verbesserung betrachtet.
+
+        Niedrigere Kosten werden als Verbesserung betrachtet.
 
         Wenn keine verwertbaren Messwerte vorhanden sind,
         bleibt der Outcome unknown.
@@ -124,6 +132,17 @@ class Outcome:
 
         self._compare_lower_is_better(
             "energy",
+            previous_state,
+            observed_state,
+            comparisons,
+        )
+
+        # ---------------------------------------------------------
+        # Wirtschaftliche Kennzahlen
+        # ---------------------------------------------------------
+
+        self._compare_lower_is_better(
+            "actual_cost",
             previous_state,
             observed_state,
             comparisons,
