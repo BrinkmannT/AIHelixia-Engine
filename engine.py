@@ -11,6 +11,7 @@ from typing import Any
 from core.action import Action
 from core.decision import Decision
 from core.economic_discovery import EconomicDiscovery
+from core.value_prioritization import ValuePrioritization
 from core.evaluation import Evaluation
 from core.factory_input import FactoryInput
 from core.feedback import Feedback
@@ -96,6 +97,7 @@ class AIHelixiaEngine:
         self.prediction = Prediction()
         self.root_cause = RootCause()
         self.economic_discovery = EconomicDiscovery()
+        self.value_prioritization = ValuePrioritization()
         self.decision = Decision()
         self.action = Action()
         self.evaluation = Evaluation()
@@ -114,6 +116,7 @@ class AIHelixiaEngine:
             "prediction",
             "root_cause",
             "economic_discovery",
+            "value_prioritization",
             "decision",
             "action",
             "evaluation",
@@ -139,6 +142,7 @@ class AIHelixiaEngine:
         self.prediction.start()
         self.root_cause.start()
         self.economic_discovery.start()
+        self.value_prioritization.start()
         self.decision.start()
         self.action.start()
         self.evaluation.start()
@@ -262,6 +266,7 @@ class AIHelixiaEngine:
         self.evaluation.stop()
         self.action.stop()
         self.decision.stop()
+        self.value_prioritization.stop()
         self.economic_discovery.stop()
         self.root_cause.stop()
         self.prediction.stop()
@@ -499,6 +504,19 @@ class AIHelixiaEngine:
             )
 
         # ---------------------------------------------------------
+        # 11a. Value Prioritization
+        # ---------------------------------------------------------
+
+        value_prioritization_result = None
+
+        if economic_discovery_result is not None:
+            value_prioritization_result = (
+                self.value_prioritization.prioritize(
+                    economic_discovery_result,
+                )
+            )
+
+        # ---------------------------------------------------------
         # 12. Decision
         # ---------------------------------------------------------
 
@@ -522,6 +540,12 @@ class AIHelixiaEngine:
             self.memory.store(
                 "economic_discovery",
                 economic_discovery_result,
+            )
+
+        if value_prioritization_result is not None:
+            self.memory.store(
+                "value_prioritization",
+                value_prioritization_result,
             )
 
         # ---------------------------------------------------------
@@ -587,6 +611,12 @@ class AIHelixiaEngine:
                 economic_discovery_result,
             )
 
+        if value_prioritization_result is not None:
+            self.persistence.save_ai_result(
+                "value_prioritization",
+                value_prioritization_result,
+            )
+
         self.persistence.save_ai_result(
             "decision",
             decision_result,
@@ -620,6 +650,9 @@ class AIHelixiaEngine:
                 "economic_discovery": (
                     economic_discovery_result
                 ),
+                "value_prioritization": (
+                    value_prioritization_result
+                ),
                 "decision": decision_result,
                 "action": action_result,
                 "evaluation": evaluation_result,
@@ -644,6 +677,9 @@ class AIHelixiaEngine:
             "root_cause": root_cause_result,
             "economic_discovery": (
                 economic_discovery_result
+            ),
+            "value_prioritization": (
+                value_prioritization_result
             ),
             "decision": decision_result,
             "action": action_result,
