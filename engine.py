@@ -11,6 +11,7 @@ from typing import Any
 from core.action import Action
 from core.decision import Decision
 from core.economic_discovery import EconomicDiscovery
+from core.economic_opportunity import EconomicOpportunity
 from core.value_prioritization import ValuePrioritization
 from core.evaluation import Evaluation
 from core.factory_input import FactoryInput
@@ -98,6 +99,7 @@ class AIHelixiaEngine:
         self.root_cause = RootCause()
         self.economic_discovery = EconomicDiscovery()
         self.value_prioritization = ValuePrioritization()
+        self.economic_opportunity = EconomicOpportunity()
         self.decision = Decision()
         self.action = Action()
         self.evaluation = Evaluation()
@@ -117,6 +119,7 @@ class AIHelixiaEngine:
             "root_cause",
             "economic_discovery",
             "value_prioritization",
+            "economic_opportunity",
             "decision",
             "action",
             "evaluation",
@@ -143,6 +146,7 @@ class AIHelixiaEngine:
         self.root_cause.start()
         self.economic_discovery.start()
         self.value_prioritization.start()
+        self.economic_opportunity.start()
         self.decision.start()
         self.action.start()
         self.evaluation.start()
@@ -266,6 +270,7 @@ class AIHelixiaEngine:
         self.evaluation.stop()
         self.action.stop()
         self.decision.stop()
+        self.economic_opportunity.stop()
         self.value_prioritization.stop()
         self.economic_discovery.stop()
         self.root_cause.stop()
@@ -517,6 +522,23 @@ class AIHelixiaEngine:
             )
 
         # ---------------------------------------------------------
+        # 11b. Economic Opportunity
+        # ---------------------------------------------------------
+
+        economic_opportunity_result = None
+
+        if (
+            economic_discovery_result is not None
+            and value_prioritization_result is not None
+        ):
+            economic_opportunity_result = (
+                self.economic_opportunity.build(
+                    economic_discovery_result,
+                    value_prioritization_result,
+                )
+            )
+
+        # ---------------------------------------------------------
         # 12. Decision
         # ---------------------------------------------------------
 
@@ -547,6 +569,12 @@ class AIHelixiaEngine:
             self.memory.store(
                 "value_prioritization",
                 value_prioritization_result,
+            )
+
+        if economic_opportunity_result is not None:
+            self.memory.store(
+                "economic_opportunity",
+                economic_opportunity_result,
             )
 
         # ---------------------------------------------------------
@@ -618,6 +646,12 @@ class AIHelixiaEngine:
                 value_prioritization_result,
             )
 
+        if economic_opportunity_result is not None:
+            self.persistence.save_ai_result(
+                "economic_opportunity",
+                economic_opportunity_result,
+            )
+
         self.persistence.save_ai_result(
             "decision",
             decision_result,
@@ -654,6 +688,9 @@ class AIHelixiaEngine:
                 "value_prioritization": (
                     value_prioritization_result
                 ),
+                "economic_opportunity": (
+                    economic_opportunity_result
+                ),
                 "decision": decision_result,
                 "action": action_result,
                 "evaluation": evaluation_result,
@@ -681,6 +718,9 @@ class AIHelixiaEngine:
             ),
             "value_prioritization": (
                 value_prioritization_result
+            ),
+            "economic_opportunity": (
+                economic_opportunity_result
             ),
             "decision": decision_result,
             "action": action_result,
@@ -1210,5 +1250,8 @@ class AIHelixiaEngine:
             "components": self.components,
             "economic_discovery": (
                 self.economic_discovery.get_status()
+            ),
+            "economic_opportunity": (
+                self.economic_opportunity.get_status()
             ),
         }
