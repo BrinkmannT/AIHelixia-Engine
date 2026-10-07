@@ -9,6 +9,7 @@ from __future__ import annotations
 from typing import Any
 
 from core.action import Action
+from core.autonomy import Autonomy
 from core.decision import Decision
 from core.economic_discovery import EconomicDiscovery
 from core.economic_opportunity import EconomicOpportunity
@@ -101,6 +102,7 @@ class AIHelixiaEngine:
         self.value_prioritization = ValuePrioritization()
         self.economic_opportunity = EconomicOpportunity()
         self.decision = Decision()
+        self.autonomy = Autonomy()
         self.action = Action()
         self.evaluation = Evaluation()
         self.feedback = Feedback()
@@ -121,6 +123,7 @@ class AIHelixiaEngine:
             "value_prioritization",
             "economic_opportunity",
             "decision",
+            "autonomy",
             "action",
             "evaluation",
             "feedback",
@@ -148,6 +151,7 @@ class AIHelixiaEngine:
         self.value_prioritization.start()
         self.economic_opportunity.start()
         self.decision.start()
+        self.autonomy.start()
         self.action.start()
         self.evaluation.start()
         self.feedback.start()
@@ -269,6 +273,7 @@ class AIHelixiaEngine:
         self.outcome.stop()
         self.evaluation.stop()
         self.action.stop()
+        self.autonomy.stop()
         self.decision.stop()
         self.economic_opportunity.stop()
         self.value_prioritization.stop()
@@ -578,11 +583,71 @@ class AIHelixiaEngine:
             )
 
         # ---------------------------------------------------------
-        # 14. Action
+        # 14. Autonomy Gate
         # ---------------------------------------------------------
 
-        action_result = self.action.execute(
+        autonomy_result = self.autonomy.evaluate(
             decision_result,
+        )
+
+        # ---------------------------------------------------------
+        # 14a. Action
+        # ---------------------------------------------------------
+
+        if autonomy_result.get(
+            "execution_allowed"
+        ) is True:
+            action_result = self.action.execute(
+                decision_result,
+            )
+
+        elif autonomy_result.get(
+            "approval_required"
+        ) is True:
+            action_result = {
+                "status": "approval_required",
+                "execution_id": None,
+                "decision_type": decision_result.get(
+                    "decision_type",
+                ),
+                "action": decision_result.get(
+                    "action",
+                    "observe",
+                ),
+                "result": {
+                    "success": False,
+                    "type": "approval_required",
+                    "message": autonomy_result.get(
+                        "reason",
+                        "Human approval required.",
+                    ),
+                },
+            }
+
+        else:
+            action_result = {
+                "status": "blocked",
+                "execution_id": None,
+                "decision_type": decision_result.get(
+                    "decision_type",
+                ),
+                "action": decision_result.get(
+                    "action",
+                    "observe",
+                ),
+                "result": {
+                    "success": False,
+                    "type": "blocked",
+                    "message": autonomy_result.get(
+                        "reason",
+                        "Action blocked by autonomy gate.",
+                    ),
+                },
+            }
+
+        self.memory.store(
+            "autonomy",
+            autonomy_result,
         )
 
         # ---------------------------------------------------------
@@ -658,6 +723,11 @@ class AIHelixiaEngine:
         )
 
         self.persistence.save_ai_result(
+            "autonomy",
+            autonomy_result,
+        )
+
+        self.persistence.save_ai_result(
             "action",
             action_result,
         )
@@ -682,6 +752,7 @@ class AIHelixiaEngine:
                 "reasoning": reasoning_result,
                 "prediction": prediction_result,
                 "root_cause": root_cause_result,
+                "autonomy": autonomy_result,
                 "economic_discovery": (
                     economic_discovery_result
                 ),
@@ -723,6 +794,7 @@ class AIHelixiaEngine:
                 economic_opportunity_result
             ),
             "decision": decision_result,
+            "autonomy": autonomy_result,
             "action": action_result,
             "evaluation": evaluation_result,
             "feedback": feedback_result,

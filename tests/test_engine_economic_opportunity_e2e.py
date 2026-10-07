@@ -130,12 +130,28 @@ def test_engine_economic_opportunity_end_to_end(tmp_path):
         ] == 100.0
 
         # ---------------------------------------------------------
+        # Autonomy
+        # ---------------------------------------------------------
+
+        autonomy = result["autonomy"]
+
+        assert autonomy["status"] == "autonomy_evaluated"
+        assert autonomy["autonomy"] == "approval_required"
+        assert autonomy["execution_allowed"] is False
+        assert autonomy["approval_required"] is True
+
+        # ---------------------------------------------------------
         # Action
         # ---------------------------------------------------------
 
         action = result["action"]
 
-        assert action["status"] == "executed"
+        # review_strategy darf ohne menschliche Freigabe
+        # nicht ausgeführt werden.
+        assert action["status"] == "approval_required"
+        assert action["execution_id"] is None
+        assert action["result"]["success"] is False
+        assert action["result"]["type"] == "approval_required"
         assert action["decision_type"] == "economic_priority"
         assert action["action"] == "review_strategy"
 

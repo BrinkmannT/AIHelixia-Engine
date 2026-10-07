@@ -31,30 +31,37 @@ def test_engine_economic_finding_flows_into_action_and_evaluation(tmp_path):
 
         economic = result["economic_discovery"]
         decision = result["decision"]
+        autonomy = result["autonomy"]
         action = result["action"]
         evaluation = result["evaluation"]
 
         assert result["status"] == "completed"
 
-        # Economic Discovery
         assert economic["finding_count"] == 1
         assert economic["critical_count"] == 1
         assert economic["total_economic_impact"] == 200000.0
         assert economic["total_savings_potential"] == 150000.0
 
-        # Decision
         assert decision["decision_type"] == "economic_priority"
         assert decision["action"] == "review_strategy"
         assert decision["economic"]["finding_count"] == 1
         assert decision["economic"]["total_economic_impact"] == 200000.0
 
-        # Action
-        assert action["status"] == "executed"
-        assert action["action"] == "review_strategy"
+        # Autonomy Gate: strategy changes require human approval.
+        assert autonomy["status"] == "autonomy_evaluated"
+        assert autonomy["autonomy"] == "approval_required"
+        assert autonomy["execution_allowed"] is False
+        assert autonomy["approval_required"] is True
 
-        # Evaluation without a measured outcome yet
+        # Action is intentionally not executed while approval is pending.
+        assert action["status"] == "approval_required"
+        assert action["action"] == "review_strategy"
+        assert action["execution_id"] is None
+        assert action["result"]["success"] is False
+        assert action["result"]["type"] == "approval_required"
+
         assert evaluation["status"] == "evaluated"
-        assert evaluation["action_status"] == "executed"
+        assert evaluation["action_status"] == "approval_required"
 
     finally:
         engine.stop()
@@ -88,7 +95,13 @@ def test_engine_economic_action_can_be_evaluated_against_observed_outcome(
             }
         )
 
-        action_result = result["action"]
+        # Simulate an explicitly approved safe internal action.
+        action_result = engine.action.execute(
+            {
+                "decision_type": "economic_priority",
+                "action": "observe",
+            }
+        )
 
         outcome_result = engine.evaluate_outcome(
             previous_state={
@@ -127,29 +140,23 @@ def test_engine_economic_action_can_be_evaluated_against_observed_outcome(
         assert learning_memory["feedback_type"] == "positive"
         assert learning_memory["learning_signal"] == "reinforce"
 
-        # Economic Outcome
         economic_outcome = outcome_result["economic_outcome"]
 
         assert economic_outcome["status"] == "calculated"
         assert economic_outcome["calculation_status"] == "realized"
         assert economic_outcome["economic_type"] == "procurement_cost"
 
-        # (12.00 - 10.63) * 100000 = 137000
         assert economic_outcome["realized_savings"] == 137000.0
 
-        # 137000 / 150000 = 0.913333...
         assert economic_outcome["realization_rate"] == pytest.approx(
             137000.0 / 150000.0
         )
 
-        # (10.63 - 10.00) * 100000 = 63000
         assert economic_outcome["remaining_gap"] == 63000.0
 
-        # Noch keine Implementierungskosten -> kein ROI
         assert economic_outcome["implementation_cost"] is None
         assert economic_outcome["roi"] is None
 
-        # Economic Outcome muss auch in Learning Memory landen.
         assert learning_memory["economic_outcome"] == economic_outcome
 
     finally:

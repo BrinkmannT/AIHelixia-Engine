@@ -268,7 +268,7 @@ EXPECTED = {
     "critical_multi_signal": {
         "outcome": "degraded",
         "outcome_success": False,
-        "outcome_evaluation": "unsuccessful",
+        "outcome_evaluation": "failed",
         "outcome_known": True,
         "feedback": "negative",
         "signal": "adjust",

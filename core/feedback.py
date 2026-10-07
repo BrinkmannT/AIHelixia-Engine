@@ -115,10 +115,7 @@ class Feedback:
         # 2. Bestätigte Verschlechterung
         # ---------------------------------------------------------
 
-        elif (
-            evaluation_result == "unsuccessful"
-            and outcome_status == "degraded"
-        ):
+        elif outcome_status == "degraded":
             feedback_type = "negative"
             signal = "adjust"
 
