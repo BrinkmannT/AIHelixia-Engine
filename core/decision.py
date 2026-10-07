@@ -57,6 +57,7 @@ class Decision:
         prediction: dict[str, Any],
         root_cause: dict[str, Any] | None = None,
         economic_discovery: dict[str, Any] | None = None,
+        value_prioritization: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """
         Erzeugt eine strukturierte Entscheidung auf Basis
@@ -94,6 +95,14 @@ class Decision:
         ):
             raise TypeError(
                 "Economic Discovery muss ein Dictionary oder None sein."
+            )
+
+        if value_prioritization is not None and not isinstance(
+            value_prioritization,
+            dict,
+        ):
+            raise TypeError(
+                "Value Prioritization muss ein Dictionary oder None sein."
             )
 
         state_assessment = reasoning.get(
@@ -134,6 +143,38 @@ class Decision:
             "priority",
             "normal",
         )
+
+        # ---------------------------------------------------------
+        # Value Prioritization
+        # ---------------------------------------------------------
+
+        value_priority = "none"
+        value_priority_score: float | None = None
+        value_top_finding: dict[str, Any] | None = None
+
+        if isinstance(value_prioritization, dict):
+            top_finding = value_prioritization.get(
+                "top_finding"
+            )
+
+            if isinstance(top_finding, dict):
+                value_top_finding = top_finding
+
+                top_priority = top_finding.get(
+                    "value_priority"
+                )
+
+                if isinstance(top_priority, str):
+                    value_priority = top_priority
+
+                top_score = self._safe_float(
+                    top_finding.get(
+                        "priority_score"
+                    )
+                )
+
+                if top_score is not None:
+                    value_priority_score = top_score
 
         # ---------------------------------------------------------
         # Root Cause Analysis
@@ -540,6 +581,11 @@ class Decision:
                 "confidence": economic_confidence,
                 "total_economic_impact": total_economic_impact,
                 "total_savings_potential": total_savings_potential,
+            },
+            "value_prioritization": {
+                "priority": value_priority,
+                "priority_score": value_priority_score,
+                "top_finding": value_top_finding,
             },
             "evidence": evidence,
             "learning_signal": {

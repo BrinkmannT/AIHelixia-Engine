@@ -525,6 +525,7 @@ class AIHelixiaEngine:
             prediction_result,
             root_cause_result,
             economic_discovery_result,
+            value_prioritization_result,
         )
 
         # ---------------------------------------------------------
