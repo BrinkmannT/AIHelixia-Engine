@@ -810,92 +810,309 @@ class AIHelixiaEngine:
 
         finding_type = finding.get("type")
 
-        if finding_type != "procurement_cost":
+        # ---------------------------------------------------------
+        # Economic Outcome Model
+        # ---------------------------------------------------------
+        # Jeder Economic-Type definiert:
+        # - welche Zustandswerte benötigt werden
+        # - wie Realized Savings berechnet werden
+        # - wie die verbleibende wirtschaftliche Lücke berechnet wird
+        #
+        # Die Engine bleibt dabei branchenneutral.
+        # ---------------------------------------------------------
+
+        if finding_type == "procurement_cost":
+            annual_volume = finding.get("annual_volume")
+            benchmark_cost = finding.get("benchmark_cost")
+            previous_cost = previous_state.get("actual_cost")
+            observed_cost = observed_state.get("actual_cost")
+
+            numeric_values = (
+                annual_volume,
+                benchmark_cost,
+                previous_cost,
+                observed_cost,
+            )
+
+            if not all(
+                isinstance(value, (int, float))
+                and not isinstance(value, bool)
+                for value in numeric_values
+            ):
+                return {
+                    "status": "not_available",
+                    "calculation_status": "insufficient_observed_data",
+                    "economic_type": finding_type,
+                    "economic_impact": finding.get("economic_impact"),
+                    "savings_potential": finding.get("savings_potential"),
+                    "realized_savings": None,
+                    "realization_rate": None,
+                    "remaining_gap": None,
+                    "implementation_cost": None,
+                    "roi": None,
+                }
+
+            if annual_volume < 0:
+                return {
+                    "status": "not_available",
+                    "calculation_status": "invalid_annual_volume",
+                    "economic_type": finding_type,
+                    "economic_impact": finding.get("economic_impact"),
+                    "savings_potential": finding.get("savings_potential"),
+                    "realized_savings": None,
+                    "realization_rate": None,
+                    "remaining_gap": None,
+                    "implementation_cost": None,
+                    "roi": None,
+                }
+
+            realized_savings = round(
+                (previous_cost - observed_cost) * annual_volume,
+                2,
+            )
+
+            remaining_gap = round(
+                (observed_cost - benchmark_cost) * annual_volume,
+                2,
+            )
+
+        elif finding_type == "energy_cost":
+            annual_kwh = finding.get("annual_kwh")
+            benchmark_cost_per_kwh = finding.get(
+                "benchmark_cost_per_kwh"
+            )
+            previous_cost_per_kwh = previous_state.get(
+                "actual_cost_per_kwh"
+            )
+            observed_cost_per_kwh = observed_state.get(
+                "actual_cost_per_kwh"
+            )
+
+            numeric_values = (
+                annual_kwh,
+                benchmark_cost_per_kwh,
+                previous_cost_per_kwh,
+                observed_cost_per_kwh,
+            )
+
+            if not all(
+                isinstance(value, (int, float))
+                and not isinstance(value, bool)
+                for value in numeric_values
+            ):
+                return {
+                    "status": "not_available",
+                    "calculation_status": "insufficient_observed_data",
+                    "economic_type": finding_type,
+                    "economic_impact": finding.get("economic_impact"),
+                    "savings_potential": finding.get("savings_potential"),
+                    "realized_savings": None,
+                    "realization_rate": None,
+                    "remaining_gap": None,
+                    "implementation_cost": None,
+                    "roi": None,
+                }
+
+            if annual_kwh < 0:
+                return {
+                    "status": "not_available",
+                    "calculation_status": "invalid_annual_volume",
+                    "economic_type": finding_type,
+                    "economic_impact": finding.get("economic_impact"),
+                    "savings_potential": finding.get("savings_potential"),
+                    "realized_savings": None,
+                    "realization_rate": None,
+                    "remaining_gap": None,
+                    "implementation_cost": None,
+                    "roi": None,
+                }
+
+            realized_savings = round(
+                (
+                    previous_cost_per_kwh
+                    - observed_cost_per_kwh
+                ) * annual_kwh,
+                2,
+            )
+
+            remaining_gap = round(
+                (
+                    observed_cost_per_kwh
+                    - benchmark_cost_per_kwh
+                ) * annual_kwh,
+                2,
+            )
+
+        elif finding_type == "maintenance_cost":
+            benchmark_maintenance_cost = finding.get(
+                "benchmark_maintenance_cost"
+            )
+            previous_maintenance_cost = previous_state.get(
+                "annual_maintenance_cost"
+            )
+            observed_maintenance_cost = observed_state.get(
+                "annual_maintenance_cost"
+            )
+
+            numeric_values = (
+                benchmark_maintenance_cost,
+                previous_maintenance_cost,
+                observed_maintenance_cost,
+            )
+
+            if not all(
+                isinstance(value, (int, float))
+                and not isinstance(value, bool)
+                for value in numeric_values
+            ):
+                return {
+                    "status": "not_available",
+                    "calculation_status": "insufficient_observed_data",
+                    "economic_type": finding_type,
+                    "economic_impact": finding.get("economic_impact"),
+                    "savings_potential": finding.get("savings_potential"),
+                    "realized_savings": None,
+                    "realization_rate": None,
+                    "remaining_gap": None,
+                    "implementation_cost": None,
+                    "roi": None,
+                }
+
+            realized_savings = round(
+                previous_maintenance_cost
+                - observed_maintenance_cost,
+                2,
+            )
+
+            remaining_gap = round(
+                observed_maintenance_cost
+                - benchmark_maintenance_cost,
+                2,
+            )
+
+        elif finding_type == "inventory_value":
+            target_inventory_value = finding.get(
+                "target_inventory_value"
+            )
+            carrying_cost_rate = finding.get(
+                "carrying_cost_rate"
+            )
+            previous_inventory_value = previous_state.get(
+                "average_inventory_value"
+            )
+            observed_inventory_value = observed_state.get(
+                "average_inventory_value"
+            )
+
+            numeric_values = (
+                target_inventory_value,
+                carrying_cost_rate,
+                previous_inventory_value,
+                observed_inventory_value,
+            )
+
+            if not all(
+                isinstance(value, (int, float))
+                and not isinstance(value, bool)
+                for value in numeric_values
+            ):
+                return {
+                    "status": "not_available",
+                    "calculation_status": "insufficient_observed_data",
+                    "economic_type": finding_type,
+                    "economic_impact": finding.get("economic_impact"),
+                    "savings_potential": finding.get("savings_potential"),
+                    "realized_savings": None,
+                    "realization_rate": None,
+                    "remaining_gap": None,
+                    "implementation_cost": None,
+                    "roi": None,
+                }
+
+            if carrying_cost_rate < 0:
+                return {
+                    "status": "not_available",
+                    "calculation_status": "invalid_carrying_cost_rate",
+                    "economic_type": finding_type,
+                    "economic_impact": finding.get("economic_impact"),
+                    "savings_potential": finding.get("savings_potential"),
+                    "realized_savings": None,
+                    "realization_rate": None,
+                    "remaining_gap": None,
+                    "implementation_cost": None,
+                    "roi": None,
+                }
+
+            realized_savings = round(
+                (
+                    previous_inventory_value
+                    - observed_inventory_value
+                ) * carrying_cost_rate,
+                2,
+            )
+
+            remaining_gap = round(
+                (
+                    observed_inventory_value
+                    - target_inventory_value
+                ) * carrying_cost_rate,
+                2,
+            )
+
+        else:
             return {
                 "status": "not_available",
                 "calculation_status": "unsupported_economic_type",
                 "economic_type": finding_type,
-                "economic_impact": finding.get(
-                    "economic_impact"
-                ),
-                "savings_potential": finding.get(
-                    "savings_potential"
-                ),
+                "economic_impact": finding.get("economic_impact"),
+                "savings_potential": finding.get("savings_potential"),
                 "realized_savings": None,
                 "realization_rate": None,
                 "remaining_gap": None,
                 "implementation_cost": None,
                 "roi": None,
             }
-
-        annual_volume = finding.get("annual_volume")
-        benchmark_cost = finding.get("benchmark_cost")
-        previous_cost = previous_state.get("actual_cost")
-        observed_cost = observed_state.get("actual_cost")
-
-        numeric_values = (
-            annual_volume,
-            benchmark_cost,
-            previous_cost,
-            observed_cost,
-        )
-
-        if not all(
-            isinstance(value, (int, float))
-            and not isinstance(value, bool)
-            for value in numeric_values
-        ):
-            return {
-                "status": "not_available",
-                "calculation_status": "insufficient_observed_data",
-                "economic_type": finding_type,
-                "economic_impact": finding.get(
-                    "economic_impact"
-                ),
-                "savings_potential": finding.get(
-                    "savings_potential"
-                ),
-                "realized_savings": None,
-                "realization_rate": None,
-                "remaining_gap": None,
-                "implementation_cost": None,
-                "roi": None,
-            }
-
-        if annual_volume < 0:
-            return {
-                "status": "not_available",
-                "calculation_status": "invalid_annual_volume",
-                "economic_type": finding_type,
-                "economic_impact": finding.get(
-                    "economic_impact"
-                ),
-                "savings_potential": finding.get(
-                    "savings_potential"
-                ),
-                "realized_savings": None,
-                "realization_rate": None,
-                "remaining_gap": None,
-                "implementation_cost": None,
-                "roi": None,
-            }
-
-        # Tatsächlich realisierte Einsparung gegenüber dem
-        # beobachteten Ausgangszustand.
-        realized_savings = round(
-            (previous_cost - observed_cost) * annual_volume,
-            2,
-        )
-
-        # Restliche wirtschaftliche Lücke zum Benchmark.
-        remaining_gap = round(
-            (observed_cost - benchmark_cost) * annual_volume,
-            2,
-        )
 
         savings_potential = finding.get(
             "savings_potential"
         )
+
+        # Einheitliche Outcome-Darstellung über alle
+        # Economic-Outcome-Typen hinweg.
+        if finding_type == "procurement_cost":
+            baseline_value = previous_cost
+            observed_value = observed_cost
+            benchmark_value = benchmark_cost
+            volume_value = annual_volume
+            metric_name = "actual_cost"
+
+        elif finding_type == "energy_cost":
+            baseline_value = previous_cost_per_kwh
+            observed_value = observed_cost_per_kwh
+            benchmark_value = benchmark_cost_per_kwh
+            volume_value = annual_kwh
+            metric_name = "actual_cost_per_kwh"
+
+        elif finding_type == "maintenance_cost":
+            baseline_value = previous_maintenance_cost
+            observed_value = observed_maintenance_cost
+            benchmark_value = benchmark_maintenance_cost
+            volume_value = None
+            metric_name = "annual_maintenance_cost"
+
+        elif finding_type == "inventory_value":
+            baseline_value = previous_inventory_value
+            observed_value = observed_inventory_value
+            benchmark_value = target_inventory_value
+            volume_value = None
+            metric_name = "average_inventory_value"
+
+        else:
+            baseline_value = None
+            observed_value = None
+            benchmark_value = None
+            volume_value = None
+            metric_name = None
 
         realization_rate = None
 
@@ -937,15 +1154,15 @@ class AIHelixiaEngine:
             "implementation_cost": implementation_cost,
             "roi": roi,
             "baseline": {
-                "actual_cost": previous_cost,
+                metric_name: baseline_value,
             },
             "observed": {
-                "actual_cost": observed_cost,
+                metric_name: observed_value,
             },
             "benchmark": {
-                "benchmark_cost": benchmark_cost,
+                metric_name: benchmark_value,
             },
-            "annual_volume": annual_volume,
+            "volume": volume_value,
         }
 
     def get_status(self) -> dict[str, object]:
