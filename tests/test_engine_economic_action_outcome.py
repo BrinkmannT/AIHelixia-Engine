@@ -1,3 +1,5 @@
+import pytest
+
 from engine import AIHelixiaEngine
 
 
@@ -96,6 +98,7 @@ def test_engine_economic_action_can_be_evaluated_against_observed_outcome(
                 "actual_cost": 10.63,
             },
             action_result=action_result,
+            economic_context=result["economic_discovery"],
         )
 
         assert outcome_result["outcome"]["outcome"] == "improved"
@@ -123,6 +126,31 @@ def test_engine_economic_action_can_be_evaluated_against_observed_outcome(
         assert learning_memory["evaluation"] == "successful"
         assert learning_memory["feedback_type"] == "positive"
         assert learning_memory["learning_signal"] == "reinforce"
+
+        # Economic Outcome
+        economic_outcome = outcome_result["economic_outcome"]
+
+        assert economic_outcome["status"] == "calculated"
+        assert economic_outcome["calculation_status"] == "realized"
+        assert economic_outcome["economic_type"] == "procurement_cost"
+
+        # (12.00 - 10.63) * 100000 = 137000
+        assert economic_outcome["realized_savings"] == 137000.0
+
+        # 137000 / 150000 = 0.913333...
+        assert economic_outcome["realization_rate"] == pytest.approx(
+            137000.0 / 150000.0
+        )
+
+        # (10.63 - 10.00) * 100000 = 63000
+        assert economic_outcome["remaining_gap"] == 63000.0
+
+        # Noch keine Implementierungskosten -> kein ROI
+        assert economic_outcome["implementation_cost"] is None
+        assert economic_outcome["roi"] is None
+
+        # Economic Outcome muss auch in Learning Memory landen.
+        assert learning_memory["economic_outcome"] == economic_outcome
 
     finally:
         engine.stop()
