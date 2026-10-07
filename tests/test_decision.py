@@ -229,3 +229,76 @@ def test_decision_preserves_historical_support_evidence():
     assert historical_support["dominant_outcome"] == "degraded"
 
     decision.stop()
+
+
+def test_decision_prioritizes_verified_critical_economic_finding():
+    decision = Decision()
+    decision.start()
+
+    reasoning = {
+        "state_assessment": "observed",
+        "learning_signal": {
+            "action": "review",
+            "priority": "normal",
+        },
+    }
+
+    prediction = {
+        "scenarios": [
+            {
+                "type": "potential_cost_optimization",
+            }
+        ],
+    }
+
+    economic_discovery = {
+        "status": "analysis_completed",
+        "finding_count": 1,
+        "critical_count": 1,
+        "total_economic_impact": 200000.0,
+        "total_savings_potential": None,
+        "findings": [
+            {
+                "status": "finding_detected",
+                "type": "procurement_cost",
+                "category": "cost_optimization",
+                "priority": "critical",
+                "economic_impact": 200000.0,
+                "savings_potential": None,
+                "savings_status": "not_estimated",
+                "confidence": 99.0,
+                "calculation_status": "calculated",
+                "evidence": {
+                    "benchmark_source": "validated_market_benchmark",
+                    "period": "2026",
+                    "supplier_count": 4,
+                    "comparable_volume": True,
+                    "verified": True,
+                },
+            }
+        ],
+    }
+
+    result = decision.decide(
+        reasoning=reasoning,
+        prediction=prediction,
+        economic_discovery=economic_discovery,
+    )
+
+    assert result["status"] == "decided"
+    assert result["decision_type"] == "economic_priority"
+    assert result["action"] == "review_strategy"
+
+    economic = result["economic"]
+
+    assert economic["status"] == "analysis_completed"
+    assert economic["actionable"] is True
+    assert economic["verified"] is True
+    assert economic["finding_count"] == 1
+    assert economic["critical_count"] == 1
+    assert economic["priority"] == "critical"
+    assert economic["confidence"] == 99.0
+    assert economic["total_economic_impact"] == 200000.0
+    assert economic["total_savings_potential"] is None
+
+    decision.stop()

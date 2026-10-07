@@ -60,7 +60,7 @@ def test_root():
 
     assert data["service"] == "AIHelixia Intelligence Engine API"
     assert data["version"] == "0.2.0"
-    assert data["engine_version"] == "0.5.2"
+    assert data["engine_version"] == "0.5.3"
     assert data["status"] == "online"
 
 

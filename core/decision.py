@@ -1,7 +1,7 @@
 """
 AIHelixia Intelligence Engine
 Decision Layer
-Version: 0.5.1
+Version: 0.5.2
 """
 
 from __future__ import annotations
@@ -36,7 +36,7 @@ class Decision:
     - keine externe Aktion
     """
 
-    VERSION = "0.5.1"
+    VERSION = "0.5.2"
 
     def __init__(self) -> None:
         self.status = "created"
@@ -56,6 +56,7 @@ class Decision:
         reasoning: dict[str, Any],
         prediction: dict[str, Any],
         root_cause: dict[str, Any] | None = None,
+        economic_discovery: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """
         Erzeugt eine strukturierte Entscheidung auf Basis
@@ -85,6 +86,14 @@ class Decision:
         ):
             raise TypeError(
                 "Root Cause muss ein Dictionary oder None sein."
+            )
+
+        if economic_discovery is not None and not isinstance(
+            economic_discovery,
+            dict,
+        ):
+            raise TypeError(
+                "Economic Discovery muss ein Dictionary oder None sein."
             )
 
         state_assessment = reasoning.get(
@@ -276,6 +285,89 @@ class Decision:
         )
 
         # ---------------------------------------------------------
+        # Economic Discovery
+        # ---------------------------------------------------------
+
+        economic_status = "not_available"
+        economic_finding_count = 0
+        economic_critical_count = 0
+        total_economic_impact = None
+        total_savings_potential = None
+        economic_priority = "none"
+        economic_confidence = None
+        economic_findings = []
+
+        if isinstance(
+            economic_discovery,
+            dict,
+        ):
+            economic_status = economic_discovery.get(
+                "status",
+                "unknown",
+            )
+
+            economic_finding_count = self._safe_int(
+                economic_discovery.get(
+                    "finding_count",
+                    0,
+                )
+            )
+
+            economic_critical_count = self._safe_int(
+                economic_discovery.get(
+                    "critical_count",
+                    0,
+                )
+            )
+
+            total_economic_impact = self._safe_float(
+                economic_discovery.get(
+                    "total_economic_impact"
+                )
+            )
+
+            total_savings_potential = self._safe_float(
+                economic_discovery.get(
+                    "total_savings_potential"
+                )
+            )
+
+            findings = economic_discovery.get(
+                "findings",
+                [],
+            )
+
+            if isinstance(
+                findings,
+                list,
+            ):
+                economic_findings = [
+                    finding
+                    for finding in findings
+                    if isinstance(
+                        finding,
+                        dict,
+                    )
+                ]
+
+            economic_priority = self._determine_economic_priority(
+                economic_discovery
+            )
+
+            economic_confidence = self._determine_economic_confidence(
+                economic_discovery
+            )
+
+        economic_actionable = (
+            economic_finding_count > 0
+            and economic_status == "analysis_completed"
+        )
+
+        economic_verified = self._has_verified_economic_evidence(
+            economic_findings
+        )
+
+        # ---------------------------------------------------------
         # Decision Logic
         # ---------------------------------------------------------
 
@@ -287,6 +379,22 @@ class Decision:
             rationale = (
                 "Es liegen keine Beobachtungen vor. "
                 "Die Engine wartet auf weitere Informationen."
+            )
+
+        elif (
+            economic_actionable
+            and economic_priority == "critical"
+            and economic_verified
+        ):
+
+            decision_type = "economic_priority"
+            action = "review_strategy"
+
+            rationale = (
+                "Die Economic-Discovery-Analyse enthält "
+                "ein verifiziertes kritisches wirtschaftliches "
+                "Finding. Der erkannte wirtschaftliche Impact "
+                "soll priorisiert untersucht werden."
             )
 
         elif (
@@ -422,12 +530,134 @@ class Decision:
                 "priority": root_cause_priority,
                 "confidence": root_cause_confidence,
             },
+            "economic": {
+                "status": economic_status,
+                "actionable": economic_actionable,
+                "verified": economic_verified,
+                "finding_count": economic_finding_count,
+                "critical_count": economic_critical_count,
+                "priority": economic_priority,
+                "confidence": economic_confidence,
+                "total_economic_impact": total_economic_impact,
+                "total_savings_potential": total_savings_potential,
+            },
             "evidence": evidence,
             "learning_signal": {
                 "type": learning_type,
                 "priority": learning_priority,
             },
         }
+
+
+    @staticmethod
+    def _safe_float(
+        value: Any,
+    ) -> float | None:
+        if isinstance(value, bool):
+            return None
+
+        if isinstance(value, (int, float)):
+            return float(value)
+
+        return None
+
+    @staticmethod
+    def _safe_int(
+        value: Any,
+    ) -> int:
+        if isinstance(value, bool):
+            return 0
+
+        if isinstance(value, int):
+            return value
+
+        if isinstance(value, float):
+            return int(value)
+
+        return 0
+
+    @staticmethod
+    def _determine_economic_priority(
+        economic_discovery: dict[str, Any],
+    ) -> str:
+        findings = economic_discovery.get(
+            "findings",
+            [],
+        )
+
+        if not isinstance(findings, list):
+            return "none"
+
+        ranking = {
+            "critical": 4,
+            "high": 3,
+            "medium": 2,
+            "low": 1,
+        }
+
+        priorities = [
+            finding.get("priority")
+            for finding in findings
+            if isinstance(finding, dict)
+            and finding.get("priority") in ranking
+        ]
+
+        if not priorities:
+            return "none"
+
+        return max(
+            priorities,
+            key=lambda priority: ranking[priority],
+        )
+
+    @classmethod
+    def _determine_economic_confidence(
+        cls,
+        economic_discovery: dict[str, Any],
+    ) -> float | None:
+        findings = economic_discovery.get(
+            "findings",
+            [],
+        )
+
+        if not isinstance(findings, list):
+            return None
+
+        confidences = []
+
+        for finding in findings:
+            if not isinstance(finding, dict):
+                continue
+
+            confidence = cls._safe_float(
+                finding.get("confidence")
+            )
+
+            if confidence is not None:
+                confidences.append(confidence)
+
+        if not confidences:
+            return None
+
+        return max(confidences)
+
+    @staticmethod
+    def _has_verified_economic_evidence(
+        findings: list[dict[str, Any]],
+    ) -> bool:
+        for finding in findings:
+            evidence = finding.get(
+                "evidence",
+                {},
+            )
+
+            if not isinstance(evidence, dict):
+                continue
+
+            if evidence.get("verified") is True:
+                return True
+
+        return False
 
     def get_status(self) -> dict[str, Any]:
         """Gibt den aktuellen Status zurück."""

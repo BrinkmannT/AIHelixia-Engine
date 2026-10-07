@@ -1,7 +1,7 @@
 """
 AIHelixia Intelligence Engine
 Core Engine
-Version: 0.5.2
+Version: 0.5.3
 """
 
 from __future__ import annotations
@@ -10,18 +10,19 @@ from typing import Any
 
 from core.action import Action
 from core.decision import Decision
+from core.economic_discovery import EconomicDiscovery
 from core.evaluation import Evaluation
 from core.factory_input import FactoryInput
 from core.feedback import Feedback
-from core.memory import Memory
 from core.knowledge import Knowledge
+from core.memory import Memory
+from core.outcome import Outcome
 from core.perception import Perception
 from core.persistence import Persistence
 from core.prediction import Prediction
 from core.reasoning import Reasoning
 from core.root_cause import RootCause
 from core.world_state import WorldState
-from core.outcome import Outcome
 from providers.model_provider import ModelProvider
 
 
@@ -41,9 +42,15 @@ class AIHelixiaEngine:
         ↓
     Memory Retrieval
         ↓
+    Knowledge
+        ↓
     Reasoning
         ↓
     Prediction
+        ↓
+    Root Cause
+        ↓
+    Economic Discovery
         ↓
     Decision
         ↓
@@ -53,11 +60,13 @@ class AIHelixiaEngine:
         ↓
     Feedback
         ↓
+    Memory
+        ↓
     Persistence
         ↺
     """
 
-    VERSION = "0.5.2"
+    VERSION = "0.5.3"
 
     def __init__(
         self,
@@ -76,14 +85,17 @@ class AIHelixiaEngine:
         self.perception = Perception()
         self.factory_input = FactoryInput()
         self.world_state = WorldState()
+
         self.persistence = Persistence(
             database_path=database_path,
         )
+
         self.memory = Memory()
         self.knowledge = Knowledge()
         self.reasoning = Reasoning()
         self.prediction = Prediction()
         self.root_cause = RootCause()
+        self.economic_discovery = EconomicDiscovery()
         self.decision = Decision()
         self.action = Action()
         self.evaluation = Evaluation()
@@ -101,10 +113,12 @@ class AIHelixiaEngine:
             "reasoning",
             "prediction",
             "root_cause",
+            "economic_discovery",
             "decision",
             "action",
             "evaluation",
             "feedback",
+            "outcome",
         ]
 
     def start(self) -> None:
@@ -124,6 +138,7 @@ class AIHelixiaEngine:
         self.reasoning.start()
         self.prediction.start()
         self.root_cause.start()
+        self.economic_discovery.start()
         self.decision.start()
         self.action.start()
         self.evaluation.start()
@@ -146,7 +161,8 @@ class AIHelixiaEngine:
 
     def _restore_latest_factory_state(self) -> dict[str, object]:
         """
-        Restore the latest persisted FactoryIQ state into WorldState.
+        Stellt den zuletzt gespeicherten FactoryIQ-Zustand
+        im WorldState wieder her.
         """
 
         history = self.persistence.get_history(
@@ -168,9 +184,15 @@ class AIHelixiaEngine:
                 "restored": False,
             }
 
-        persisted_data = latest.get("data", {})
+        persisted_data = latest.get(
+            "data",
+            {},
+        )
 
-        if not isinstance(persisted_data, dict):
+        if not isinstance(
+            persisted_data,
+            dict,
+        ):
             return {
                 "status": "invalid_persisted_factory_data",
                 "restored": False,
@@ -207,7 +229,10 @@ class AIHelixiaEngine:
             "restored": True,
             "source_id": latest.get("id"),
             "factory_id": (
-                persisted_data.get("factory", {}).get("id")
+                persisted_data.get(
+                    "factory",
+                    {},
+                ).get("id")
                 if isinstance(
                     persisted_data.get("factory"),
                     dict,
@@ -237,6 +262,7 @@ class AIHelixiaEngine:
         self.evaluation.stop()
         self.action.stop()
         self.decision.stop()
+        self.economic_discovery.stop()
         self.root_cause.stop()
         self.prediction.stop()
         self.reasoning.stop()
@@ -273,7 +299,10 @@ class AIHelixiaEngine:
             "alarms",
             [],
         ):
-            if isinstance(alarm, dict):
+            if isinstance(
+                alarm,
+                dict,
+            ):
                 self.persistence.save_alarm(
                     alarm,
                 )
@@ -297,7 +326,10 @@ class AIHelixiaEngine:
                 "AIHelixia Engine ist nicht gestartet."
             )
 
+        # ---------------------------------------------------------
         # 1. Factory Input Detection
+        # ---------------------------------------------------------
+
         is_factory_input = (
             isinstance(input_data, dict)
             and "factory" in input_data
@@ -309,32 +341,47 @@ class AIHelixiaEngine:
         factory_ingest_result = None
 
         if is_factory_input:
-            factory_ingest_result = self.ingest_factory_data(
-                input_data
+            factory_ingest_result = (
+                self.ingest_factory_data(
+                    input_data
+                )
             )
 
+        # ---------------------------------------------------------
         # 2. Perception
+        # ---------------------------------------------------------
+
         perception_result = self.perception.perceive(
             input_data,
         )
 
+        # ---------------------------------------------------------
         # 3. World State
+        # ---------------------------------------------------------
+
         if is_factory_input:
             world_state = self.world_state.get_state()
+
         else:
             observation = perception_result.get(
                 "observation",
                 input_data,
             )
 
-            if isinstance(observation, dict):
+            if isinstance(
+                observation,
+                dict,
+            ):
                 self.world_state.add_observation(
                     observation,
                 )
 
             world_state = self.world_state.get_state()
 
+        # ---------------------------------------------------------
         # 4. Persistence
+        # ---------------------------------------------------------
+
         self.persistence.save_factory_state(
             world_state,
         )
@@ -348,10 +395,14 @@ class AIHelixiaEngine:
             },
         )
 
+        # ---------------------------------------------------------
         # 5. Memory
+        # ---------------------------------------------------------
+
         if is_factory_input:
             memory_type = "factory_state"
             memory_data = world_state
+
         else:
             memory_type = "observation"
             memory_data = perception_result.get(
@@ -366,18 +417,27 @@ class AIHelixiaEngine:
 
         memory_result = self.memory.retrieve()
 
+        # ---------------------------------------------------------
         # 6. Knowledge
+        # ---------------------------------------------------------
+
         knowledge_result = self.knowledge.analyze(
             memory_result,
         )
 
+        # ---------------------------------------------------------
         # 7. Reasoning
+        # ---------------------------------------------------------
+
         reasoning_result = self.reasoning.analyze(
             world_state,
             memory_result,
         )
 
+        # ---------------------------------------------------------
         # 8. Knowledge Query
+        # ---------------------------------------------------------
+
         anomaly_analysis = reasoning_result.get(
             "anomaly_analysis",
             {},
@@ -388,7 +448,10 @@ class AIHelixiaEngine:
             [],
         )
 
-        if not isinstance(signal_types, list):
+        if not isinstance(
+            signal_types,
+            list,
+        ):
             signal_types = []
 
         knowledge_query_result = self.knowledge.query(
@@ -396,48 +459,99 @@ class AIHelixiaEngine:
             signal_types=signal_types,
         )
 
+        # ---------------------------------------------------------
         # 9. Prediction
+        # ---------------------------------------------------------
+
         prediction_result = self.prediction.predict(
             world_state,
             reasoning_result,
         )
 
+        # ---------------------------------------------------------
         # 10. Root Cause Analysis
+        # ---------------------------------------------------------
+
         root_cause_result = self.root_cause.analyze(
             reasoning=reasoning_result,
             prediction=prediction_result,
             knowledge=knowledge_query_result,
         )
 
-        # 11. Decision
+        # ---------------------------------------------------------
+        # 11. Economic Discovery
+        # ---------------------------------------------------------
+
+        economic_discovery_input = input_data.get(
+            "economic_discovery"
+        )
+
+        economic_discovery_result = None
+
+        if isinstance(
+            economic_discovery_input,
+            dict,
+        ):
+            economic_discovery_result = (
+                self.economic_discovery.analyze(
+                    economic_discovery_input,
+                )
+            )
+
+        # ---------------------------------------------------------
+        # 12. Decision
+        # ---------------------------------------------------------
+
         decision_result = self.decision.decide(
             reasoning_result,
             prediction_result,
             root_cause_result,
+            economic_discovery_result,
         )
 
-        # 12. Memory
+        # ---------------------------------------------------------
+        # 13. Memory
+        # ---------------------------------------------------------
+
         self.memory.store(
             "decision",
             decision_result,
         )
 
-        # 13. Action
+        if economic_discovery_result is not None:
+            self.memory.store(
+                "economic_discovery",
+                economic_discovery_result,
+            )
+
+        # ---------------------------------------------------------
+        # 14. Action
+        # ---------------------------------------------------------
+
         action_result = self.action.execute(
             decision_result,
         )
 
-        # 14. Evaluation
+        # ---------------------------------------------------------
+        # 15. Evaluation
+        # ---------------------------------------------------------
+
         evaluation_result = self.evaluation.evaluate(
             action_result=action_result,
         )
 
-        # 15. Feedback
+        # ---------------------------------------------------------
+        # 16. Feedback
+        # ---------------------------------------------------------
+
         feedback_result = self.feedback.process(
             evaluation_result,
         )
 
-        # 16. Memory
+        # ---------------------------------------------------------
+        # 17. Memory
+        # ---------------------------------------------------------
+
         self.memory.store(
             "evaluation",
             evaluation_result,
@@ -448,7 +562,10 @@ class AIHelixiaEngine:
             feedback_result,
         )
 
-        # 17. Persistence
+        # ---------------------------------------------------------
+        # 18. Persistence
+        # ---------------------------------------------------------
+
         self.persistence.save_ai_result(
             "reasoning",
             reasoning_result,
@@ -463,6 +580,12 @@ class AIHelixiaEngine:
             "root_cause",
             root_cause_result,
         )
+
+        if economic_discovery_result is not None:
+            self.persistence.save_ai_result(
+                "economic_discovery",
+                economic_discovery_result,
+            )
 
         self.persistence.save_ai_result(
             "decision",
@@ -484,18 +607,29 @@ class AIHelixiaEngine:
             feedback_result,
         )
 
+        # ---------------------------------------------------------
+        # 19. Closed Loop Event
+        # ---------------------------------------------------------
+
         self.persistence.save_engine_event(
             "closed_loop_completed",
             {
                 "reasoning": reasoning_result,
                 "prediction": prediction_result,
                 "root_cause": root_cause_result,
+                "economic_discovery": (
+                    economic_discovery_result
+                ),
                 "decision": decision_result,
                 "action": action_result,
                 "evaluation": evaluation_result,
                 "feedback": feedback_result,
             },
         )
+
+        # ---------------------------------------------------------
+        # Final Result
+        # ---------------------------------------------------------
 
         return {
             "status": "completed",
@@ -508,6 +642,9 @@ class AIHelixiaEngine:
             "reasoning": reasoning_result,
             "prediction": prediction_result,
             "root_cause": root_cause_result,
+            "economic_discovery": (
+                economic_discovery_result
+            ),
             "decision": decision_result,
             "action": action_result,
             "evaluation": evaluation_result,
@@ -534,6 +671,8 @@ class AIHelixiaEngine:
         Evaluation
             ↓
         Feedback
+            ↓
+        Learning Memory
         """
 
         outcome_result = self.outcome.evaluate(
@@ -553,16 +692,33 @@ class AIHelixiaEngine:
         # ---------------------------------------------------------
         # Outcome Learning Memory
         # ---------------------------------------------------------
+
         learning_memory = {
             "type": "outcome_learning",
-            "outcome": outcome_result.get("outcome"),
-            "outcome_success": outcome_result.get("success"),
-            "outcome_confidence": outcome_result.get("confidence"),
-            "evaluation": evaluation_result.get("evaluation"),
-            "evaluation_score": evaluation_result.get("score"),
-            "feedback_type": feedback_result.get("feedback_type"),
-            "learning_signal": feedback_result.get("signal"),
-            "recommendation": feedback_result.get("recommendation"),
+            "outcome": outcome_result.get(
+                "outcome"
+            ),
+            "outcome_success": outcome_result.get(
+                "success"
+            ),
+            "outcome_confidence": outcome_result.get(
+                "confidence"
+            ),
+            "evaluation": evaluation_result.get(
+                "evaluation"
+            ),
+            "evaluation_score": evaluation_result.get(
+                "score"
+            ),
+            "feedback_type": feedback_result.get(
+                "feedback_type"
+            ),
+            "learning_signal": feedback_result.get(
+                "signal"
+            ),
+            "recommendation": feedback_result.get(
+                "recommendation"
+            ),
         }
 
         self.memory.store(
@@ -583,4 +739,7 @@ class AIHelixiaEngine:
             "version": self.VERSION,
             "status": self.status,
             "components": self.components,
+            "economic_discovery": (
+                self.economic_discovery.get_status()
+            ),
         }
