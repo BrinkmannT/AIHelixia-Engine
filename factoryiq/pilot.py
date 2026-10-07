@@ -174,6 +174,11 @@ class FactoryIQPilot:
             {},
         )
 
+        anomaly_analysis = reasoning_data.get(
+            "anomaly_analysis",
+            {},
+        )
+
         learning_signal = reasoning_data.get(
             "learning_signal",
             {},
@@ -256,6 +261,9 @@ class FactoryIQPilot:
                 "status_counts": machine_status_counts,
                 "machines": machines,
             },
+            "sensors": {
+                "sensors": overview["operations"]["sensors"],
+            },
             "alarms": {
                 "severity_counts": alarm_severity_counts,
                 "alarms": alarms,
@@ -267,6 +275,7 @@ class FactoryIQPilot:
                 "operational_signal": industrial_analysis.get(
                     "operational_signal"
                 ),
+                "anomaly_analysis": anomaly_analysis,
                 "learning_signal": learning_signal,
                 "prediction": prediction_data,
                 "decision": decision_data,

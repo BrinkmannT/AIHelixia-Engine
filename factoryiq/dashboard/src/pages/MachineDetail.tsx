@@ -1,35 +1,51 @@
 import { useMemo, useState } from "react";
-import {
-  anomalies,
-  machines,
-  maintenancePredictions,
-  sensors,
-} from "../services/mockData";
+import type { FactoryDashboardResponse } from "../services/factoryApi";
 
 interface MachineDetailProps {
   machineId: string;
   onBack: () => void;
+  engineDashboard?: FactoryDashboardResponse | null;
 }
 
 export default function MachineDetail({
   machineId,
   onBack,
+  engineDashboard,
 }: MachineDetailProps) {
-  const machine = machines.find((item) => item.id === machineId);
+  const engineMachine = engineDashboard?.machines.machines.find((item) => item.id === machineId);
+  const machine = engineMachine
+    ? {
+        id: engineMachine.id,
+        name: engineMachine.name ?? engineMachine.id,
+        area: "Werkbereich",
+        productionLine: engineMachine.production_line_id ?? "—",
+        status: engineMachine.status === "warning" || engineMachine.status === "degraded" ? "warning" : engineMachine.status === "down" || engineMachine.status === "offline" ? "critical" : "normal",
+      }
+    : undefined;
 
-  const machineSensors = useMemo(
-    () => sensors.filter((sensor) => sensor.machineId === machineId),
-    [machineId],
-  );
+  const machineSensors = useMemo(() => (engineDashboard?.sensors.sensors ?? [])
+    .filter((sensor) => sensor.machine_id === machineId)
+    .map((sensor) => ({
+      machineId: sensor.machine_id,
+      type: sensor.type,
+      value: sensor.value,
+      unit: sensor.unit ?? "",
+      status: "normal" as const,
+      normalMin: undefined,
+      normalMax: undefined,
+    })), [engineDashboard, machineId]);
 
-  const machineAnomalies = useMemo(
-    () => anomalies.filter((anomaly) => anomaly.machineId === machineId),
-    [machineId],
-  );
+  const machineAnomalies = useMemo(() => (engineDashboard?.alarms.alarms ?? [])
+    .filter((alarm) => alarm.machine_id === machineId)
+    .map((alarm) => ({
+      machineId: alarm.machine_id,
+      title: alarm.message ?? alarm.type ?? "Anomalie erkannt",
+      description: alarm.message ?? alarm.type ?? "Anomalie erkannt",
+      value: alarm.severity,
+      aiConfidence: undefined,
+    })), [engineDashboard, machineId]);
 
-  const prediction = maintenancePredictions.find(
-    (item) => item.machineId === machineId,
-  );
+  const prediction: { failureProbability: number; estimatedWindow: string; confidence: number } | null = null;
 
   if (!machine) {
     return (
@@ -263,7 +279,7 @@ export default function MachineDetail({
             <div className="machine-v4-diagnosis-body">
               <div className="machine-v4-risk">
                 <div className="machine-v4-risk-ring">
-                  <strong>{prediction.failureProbability}%</strong>
+                  <strong>—%</strong>
                   <span>Risiko</span>
                 </div>
 
@@ -281,12 +297,12 @@ export default function MachineDetail({
 
                 <div>
                   <span>Prognosefenster</span>
-                  <strong>{prediction.estimatedWindow}</strong>
+                  <strong>Keine Prognose</strong>
                 </div>
 
                 <div>
                   <span>KI-Konfidenz</span>
-                  <strong>{prediction.confidence}%</strong>
+                  <strong>—%</strong>
                 </div>
               </div>
 

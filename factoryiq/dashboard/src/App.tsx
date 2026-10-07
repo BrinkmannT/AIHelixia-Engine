@@ -1,7 +1,13 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import "./App.css";
 import Machines from "./pages/Machines";
+import { getFactoryDashboard } from "./services/factoryApi";
 import MachineDetail from "./pages/MachineDetail";
+import Production from "./pages/Production";
+import FactoryOverview from "./pages/FactoryOverview";
+import Anomalies from "./pages/Anomalies";
+import Maintenance from "./pages/Maintenance";
+import Quality from "./pages/Quality";
 import { anomalies as demoAnomalies, kpis as demoKpis, machines as demoMachines } from "./services/mockData";
 
 type Page =
@@ -68,9 +74,55 @@ function StatusDot({ status }: { status: string }) {
 
 function Dashboard({
   onNavigate,
+  engineDashboard,
+  onSelectMachine,
 }: {
   onNavigate: (page: Page) => void;
+  onSelectMachine: (machineId: string) => void;
+  engineDashboard: Awaited<ReturnType<typeof getFactoryDashboard>> | null;
 }) {
+  const machineStatusSummary = {
+    total: machines.length,
+    normal: machines.filter((machine) => machine.status === "normal").length,
+    warning: machines.filter((machine) => machine.status === "warning").length,
+    critical: machines.filter((machine) => machine.status === "critical").length,
+  };
+
+  const [dashboardPeriod, setDashboardPeriod] = useState<"24h" | "7d" | "30d" | "90d">("7d");
+  const dashboardKpis = kpis.map((kpi) => {
+    if (kpi.label === "Active Alarms" && engineDashboard) {
+      return {
+        ...kpi,
+        value: String(engineDashboard.kpis.alarm_count),
+      };
+    }
+
+    if (kpi.label === "Machines" && engineDashboard) {
+      return {
+        ...kpi,
+        value: String(engineDashboard.kpis.machine_count),
+      };
+    }
+
+    if (kpi.label === "Energy" && engineDashboard) {
+      return {
+        ...kpi,
+        value: `${engineDashboard.kpis.energy_consumption ?? "—"} ${
+          engineDashboard.kpis.energy_unit ?? ""
+        }`.trim(),
+      };
+    }
+
+    if (kpi.label === "Production" && engineDashboard) {
+      return {
+        ...kpi,
+        value: String(engineDashboard.kpis.production_output ?? "—"),
+      };
+    }
+
+    return kpi;
+  });
+
   return (
     <main className="main-content">
       <header className="topbar">
@@ -98,15 +150,15 @@ function Dashboard({
         </div>
 
         <div className="time-selector">
-          <button>24 Std.</button>
-          <button className="active">7 Tage</button>
-          <button>30 Tage</button>
-          <button>90 Tage</button>
+          <button className={dashboardPeriod === "24h" ? "active" : ""} onClick={() => setDashboardPeriod("24h")}>24 Std.</button>
+          <button className={dashboardPeriod === "7d" ? "active" : ""} onClick={() => setDashboardPeriod("7d")}>7 Tage</button>
+          <button className={dashboardPeriod === "30d" ? "active" : ""} onClick={() => setDashboardPeriod("30d")}>30 Tage</button>
+          <button className={dashboardPeriod === "90d" ? "active" : ""} onClick={() => setDashboardPeriod("90d")}>90 Tage</button>
         </div>
       </section>
 
       <section className="kpi-grid">
-        {kpis.map((kpi) => (
+        {dashboardKpis.map((kpi) => (
           <button
             className="kpi-card"
             key={kpi.label}
@@ -130,8 +182,8 @@ function Dashboard({
             <strong>{kpi.value}</strong>
 
             <div className="kpi-footer">
-              <span className={kpi.trend.startsWith("-") ? "positive" : ""}>
-                {kpi.trend}
+              <span className={Number(kpi.trend) < 0 ? "positive" : ""}>
+                {Number(kpi.trend) > 0 ? "+" : ""}{Number(kpi.trend).toFixed(1).replace(".", ",")} %
               </span>
               <span>gegenüber vorherigem Zeitraum</span>
             </div>
@@ -160,25 +212,30 @@ function Dashboard({
           </div>
 
           <div className="plant-map">
-            <div className="plant-zone zone-refinery">
+            <button className="plant-zone zone-refinery" onClick={() => { onSelectMachine("P-12"); onNavigate("Maschinen"); }}>
               <span>RAFFINERIE</span>
-              <b>P-12</b>
-            </div>
+              <b>P-12 · R-101</b>
+            </button>
 
-            <div className="plant-zone zone-energy">
+            <button className="plant-zone zone-energy" onClick={() => { onSelectMachine("E-03"); onNavigate("Maschinen"); }}>
               <span>ENERGIEZENTRALE</span>
-              <b>E-03</b>
-            </div>
+              <b>E-03 · F-01</b>
+            </button>
 
-            <div className="plant-zone zone-supply">
+            <button className="plant-zone zone-supply" onClick={() => { onSelectMachine("K-07"); onNavigate("Maschinen"); }}>
               <span>VERSORGUNG</span>
               <b>K-07</b>
-            </div>
+            </button>
 
-            <div className="plant-zone zone-tank">
+            <button className="plant-zone zone-tank" onClick={() => { onSelectMachine("T-02"); onNavigate("Maschinen"); }}>
               <span>TANKLAGER</span>
               <b>T-02</b>
-            </div>
+            </button>
+
+            <button className="plant-zone zone-maintenance" onClick={() => { onSelectMachine("M-05"); onNavigate("Maschinen"); }}>
+              <span>INSTANDHALTUNG</span>
+              <b>M-05</b>
+            </button>
 
             <div className="plant-pipeline pipeline-one" />
             <div className="plant-pipeline pipeline-two" />
@@ -207,7 +264,7 @@ function Dashboard({
           </div>
 
           <div className="anomaly-list">
-            {anomalies.map((anomaly) => (
+            {anomalies.slice(0, 5).map((anomaly) => (
               <button
                 className="anomaly-row"
                 key={anomaly.machine}
@@ -238,6 +295,13 @@ function Dashboard({
               <h3>Maschinenstatus</h3>
             </div>
             <button onClick={() => onNavigate("Maschinen")}>Maschinen →</button>
+          </div>
+
+          <div className="machine-status-summary">
+            <div><span className="status-dot normal" /><strong>{machineStatusSummary.normal}</strong><small>Normal</small></div>
+            <div><span className="status-dot warning" /><strong>{machineStatusSummary.warning}</strong><small>Warnung</small></div>
+            <div><span className="status-dot critical" /><strong>{machineStatusSummary.critical}</strong><small>Kritisch</small></div>
+            <div className="machine-status-total"><strong>{machineStatusSummary.total}</strong><small>Gesamt</small></div>
           </div>
 
           <div className="machine-table">
@@ -271,23 +335,33 @@ function Dashboard({
               <span className="eyebrow">AIHELIXIA ENGINE</span>
               <h3>KI-Erkenntnisse</h3>
             </div>
-            <StatusDot status="normal" />
+            <StatusDot status={engineDashboard ? "normal" : "critical"} />
           </div>
 
           <div className="ai-engine-status">
             <div className="engine-icon">✦</div>
             <div>
-              <strong>KI-Engine betriebsbereit</strong>
-              <span>Analysedienst verbunden</span>
+              <strong>
+                {engineDashboard
+                  ? "KI-Engine betriebsbereit"
+                  : "KI-Engine offline"}
+              </strong>
+              <span>
+                {engineDashboard
+                  ? "Analysedienst verbunden · ONLINE"
+                  : "Demo-Daten aktiv · OFFLINE"}
+              </span>
             </div>
           </div>
 
           <div className="ai-insight">
-            <span>HOHE KONFIDENZ</span>
-            <strong>P-12 zeigt ein erhöhtes Ausfallrisiko.</strong>
+            <span>{anomalies[0]?.priority ?? "INFO"} · KI-ERKENNTNIS</span>
+            <strong>
+              {anomalies[0]?.machine ?? "Keine Maschine"} zeigt ein auffälliges Muster.
+            </strong>
             <p>
-              Vibrationsmuster weichen um 48% vom historischen Normalbereich
-              ab.
+              {anomalies[0]?.title ?? "Aktuell liegen keine relevanten Anomalien vor."}
+              {anomalies[0]?.value ? ` · Messwert ${anomalies[0].value}` : ""}
             </p>
           </div>
 
@@ -336,6 +410,21 @@ function PlaceholderPage({ page }: { page: Page }) {
 }
 
 export default function App() {
+  const [engineDashboard, setEngineDashboard] = useState<Awaited<
+    ReturnType<typeof getFactoryDashboard>
+  > | null>(null);
+
+  useEffect(() => {
+    getFactoryDashboard()
+      .then((data) => {
+        console.log("[FactoryIQ] Engine Dashboard verbunden:", data);
+        setEngineDashboard(data);
+      })
+      .catch((error) => {
+        console.warn("[FactoryIQ] Engine nicht erreichbar:", error);
+      });
+  }, []);
+
   const [activePage, setActivePage] = useState<Page>("Dashboard");
   const [selectedMachineId, setSelectedMachineId] = useState<string | null>(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -406,14 +495,44 @@ export default function App() {
 
       <div className="app-content">
         {activePage === "Dashboard" ? (
-          <Dashboard onNavigate={setActivePage} />
+          <Dashboard
+            onNavigate={setActivePage}
+            onSelectMachine={setSelectedMachineId}
+            engineDashboard={engineDashboard}
+          />
         ) : activePage === "Maschinen" && selectedMachineId ? (
           <MachineDetail
             machineId={selectedMachineId}
             onBack={() => setSelectedMachineId(null)}
+            engineDashboard={engineDashboard}
           />
         ) : activePage === "Maschinen" ? (
-          <Machines onSelectMachine={setSelectedMachineId} />
+          <Machines onSelectMachine={setSelectedMachineId} engineDashboard={engineDashboard} />
+        ) : activePage === "Produktion" ? (
+          <Production
+            engineDashboard={engineDashboard}
+            onBack={() => setActivePage("Dashboard")}
+          />
+        ) : activePage === "Werksübersicht" ? (
+          <FactoryOverview
+            engineDashboard={engineDashboard}
+            onBack={() => setActivePage("Dashboard")}
+          />
+        ) : activePage === "Anomalien" ? (
+          <Anomalies
+            engineDashboard={engineDashboard}
+            onBack={() => setActivePage("Dashboard")}
+          />
+        ) : activePage === "Vorausschauende Instandhaltung" ? (
+          <Maintenance
+            engineDashboard={engineDashboard}
+            onBack={() => setActivePage("Dashboard")}
+          />
+        ) : activePage === "Qualität" ? (
+          <Quality
+            engineDashboard={engineDashboard}
+            onBack={() => setActivePage("Dashboard")}
+          />
         ) : (
           <PlaceholderPage page={activePage} />
         )}

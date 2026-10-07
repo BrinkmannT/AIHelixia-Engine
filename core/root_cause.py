@@ -51,6 +51,7 @@ class RootCause:
         self,
         reasoning: dict[str, Any],
         prediction: dict[str, Any],
+        knowledge: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
 
         if self.status != "running":
@@ -66,6 +67,14 @@ class RootCause:
         if not isinstance(prediction, dict):
             raise TypeError(
                 "prediction must be a dictionary"
+            )
+
+        if knowledge is not None and not isinstance(
+            knowledge,
+            dict,
+        ):
+            raise TypeError(
+                "knowledge must be a dictionary or None"
             )
 
         anomaly_analysis = reasoning.get(
@@ -188,6 +197,9 @@ class RootCause:
                     historical_support=(
                         historical_support
                     ),
+                    knowledge_evidence=(
+                        knowledge
+                    ),
                 )
             )
 
@@ -223,6 +235,9 @@ class RootCause:
                     ),
                     historical_support=(
                         historical_support
+                    ),
+                    knowledge_evidence=(
+                        knowledge
                     ),
                 )
             )
@@ -261,6 +276,9 @@ class RootCause:
                     historical_support=(
                         historical_support
                     ),
+                    knowledge_evidence=(
+                        knowledge
+                    ),
                 )
             )
 
@@ -292,6 +310,9 @@ class RootCause:
                     historical_support=(
                         historical_support
                     ),
+                    knowledge_evidence=(
+                        knowledge
+                    ),
                 )
             )
 
@@ -321,6 +342,9 @@ class RootCause:
                     historical_support=(
                         historical_support
                     ),
+                    knowledge_evidence=(
+                        knowledge
+                    ),
                 )
             )
 
@@ -342,6 +366,7 @@ class RootCause:
             "input_signal_types": signal_types,
             "correlated_machines": correlated_machines,
             "historical_support": historical_support,
+            "knowledge_evidence": knowledge,
         }
 
         self.last_analysis = result
@@ -435,6 +460,7 @@ class RootCause:
         correlated_machines: list[Any],
         prediction_scenarios: list[dict[str, Any]],
         historical_support: dict[str, Any],
+        knowledge_evidence: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
 
         supporting_predictions = []
@@ -479,6 +505,9 @@ class RootCause:
             historical_support=(
                 historical_support
             ),
+            knowledge_evidence=(
+                knowledge_evidence
+            ),
         )
 
         confidence_factors = []
@@ -508,6 +537,33 @@ class RootCause:
                 "historical_support_available"
             )
 
+        knowledge_support = evidence.get(
+            "knowledge_support",
+            {}
+        )
+
+        if (
+            isinstance(
+                knowledge_support,
+                dict,
+            )
+            and knowledge_support.get(
+                "available"
+            )
+        ):
+            knowledge_strength = knowledge_support.get(
+                "evidence_strength"
+            )
+
+            if knowledge_strength == "strong":
+                confidence_factors.append(
+                    "knowledge_support_strong"
+                )
+            elif knowledge_strength == "moderate":
+                confidence_factors.append(
+                    "knowledge_support_moderate"
+                )
+
         return {
             "type": hypothesis_type,
             "priority": priority,
@@ -526,6 +582,7 @@ class RootCause:
         correlated_machines: list[Any],
         supporting_predictions: list[str],
         historical_support: dict[str, Any],
+        knowledge_evidence: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
 
         historical_available = (
@@ -555,6 +612,54 @@ class RootCause:
 
         else:
             evidence_strength = "none"
+
+        knowledge_available = (
+            isinstance(
+                knowledge_evidence,
+                dict,
+            )
+            and knowledge_evidence.get(
+                "status"
+            ) == "knowledge_available"
+            and knowledge_evidence.get(
+                "support_count",
+                0,
+            ) > 0
+        )
+
+        knowledge_support = {
+            "available": knowledge_available,
+            "support_count": (
+                knowledge_evidence.get(
+                    "support_count",
+                    0,
+                )
+                if knowledge_available
+                else 0
+            ),
+            "dominant_outcome": (
+                knowledge_evidence.get(
+                    "dominant_outcome"
+                )
+                if knowledge_available
+                else None
+            ),
+            "dominant_outcome_ratio": (
+                knowledge_evidence.get(
+                    "dominant_outcome_ratio"
+                )
+                if knowledge_available
+                else None
+            ),
+            "evidence_strength": (
+                knowledge_evidence.get(
+                    "evidence_strength",
+                    "none",
+                )
+                if knowledge_available
+                else "none"
+            ),
+        }
 
         return {
             "evidence_count": evidence_count,
@@ -589,6 +694,15 @@ class RootCause:
                     "dominant_outcome"
                 )
             ),
+            "knowledge_evidence": (
+                knowledge_evidence
+                if isinstance(
+                    knowledge_evidence,
+                    dict,
+                )
+                else None
+            ),
+            "knowledge_support": knowledge_support,
             "evidence_strength": evidence_strength,
         }
 

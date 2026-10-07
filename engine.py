@@ -14,6 +14,7 @@ from core.evaluation import Evaluation
 from core.factory_input import FactoryInput
 from core.feedback import Feedback
 from core.memory import Memory
+from core.knowledge import Knowledge
 from core.perception import Perception
 from core.persistence import Persistence
 from core.prediction import Prediction
@@ -79,6 +80,7 @@ class AIHelixiaEngine:
             database_path=database_path,
         )
         self.memory = Memory()
+        self.knowledge = Knowledge()
         self.reasoning = Reasoning()
         self.prediction = Prediction()
         self.root_cause = RootCause()
@@ -95,6 +97,7 @@ class AIHelixiaEngine:
             "world_state",
             "persistence",
             "memory",
+            "knowledge",
             "reasoning",
             "prediction",
             "root_cause",
@@ -117,6 +120,7 @@ class AIHelixiaEngine:
         restore_result = self._restore_latest_factory_state()
 
         self.memory.start()
+        self.knowledge.start()
         self.reasoning.start()
         self.prediction.start()
         self.root_cause.start()
@@ -236,6 +240,7 @@ class AIHelixiaEngine:
         self.root_cause.stop()
         self.prediction.stop()
         self.reasoning.stop()
+        self.knowledge.stop()
         self.memory.stop()
         self.world_state.stop()
         self.factory_input.stop()
@@ -361,53 +366,78 @@ class AIHelixiaEngine:
 
         memory_result = self.memory.retrieve()
 
-        # 6. Reasoning
+        # 6. Knowledge
+        knowledge_result = self.knowledge.analyze(
+            memory_result,
+        )
+
+        # 7. Reasoning
         reasoning_result = self.reasoning.analyze(
             world_state,
             memory_result,
         )
 
-        # 7. Prediction
+        # 8. Knowledge Query
+        anomaly_analysis = reasoning_result.get(
+            "anomaly_analysis",
+            {},
+        )
+
+        signal_types = anomaly_analysis.get(
+            "signal_types",
+            [],
+        )
+
+        if not isinstance(signal_types, list):
+            signal_types = []
+
+        knowledge_query_result = self.knowledge.query(
+            memory_entries=memory_result,
+            signal_types=signal_types,
+        )
+
+        # 9. Prediction
         prediction_result = self.prediction.predict(
             world_state,
             reasoning_result,
         )
 
-        # 8. Root Cause Analysis
+        # 10. Root Cause Analysis
         root_cause_result = self.root_cause.analyze(
             reasoning=reasoning_result,
             prediction=prediction_result,
+            knowledge=knowledge_query_result,
         )
 
-        # 9. Decision
+        # 11. Decision
         decision_result = self.decision.decide(
             reasoning_result,
             prediction_result,
             root_cause_result,
         )
 
-        # 10. Memory
+        # 12. Memory
         self.memory.store(
             "decision",
             decision_result,
         )
 
-        # 11. Action
+        # 13. Action
         action_result = self.action.execute(
             decision_result,
         )
 
-        # 12. Evaluation
+        # 14. Evaluation
         evaluation_result = self.evaluation.evaluate(
             action_result=action_result,
         )
 
-        # 13. Feedback
+        # 15. Feedback
         feedback_result = self.feedback.process(
             evaluation_result,
         )
 
-        # 14. Memory
+        # 16. Memory
         self.memory.store(
             "evaluation",
             evaluation_result,
@@ -418,7 +448,7 @@ class AIHelixiaEngine:
             feedback_result,
         )
 
-        # 15. Persistence
+        # 17. Persistence
         self.persistence.save_ai_result(
             "reasoning",
             reasoning_result,
@@ -473,6 +503,8 @@ class AIHelixiaEngine:
             "perception": perception_result,
             "world_state": world_state,
             "memory": memory_result,
+            "knowledge": knowledge_result,
+            "knowledge_query": knowledge_query_result,
             "reasoning": reasoning_result,
             "prediction": prediction_result,
             "root_cause": root_cause_result,

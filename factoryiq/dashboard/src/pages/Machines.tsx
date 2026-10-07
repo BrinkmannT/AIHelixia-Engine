@@ -1,16 +1,40 @@
-import { useMemo, useState } from "react";
-import { machines, sensors, maintenancePredictions } from "../services/mockData";
+import { useEffect, useMemo, useState } from "react";
+import { getFactoryDashboard, type FactoryDashboardResponse } from "../services/factoryApi";
 import type { MachineStatus } from "../types";
 
 type Filter = "alle" | MachineStatus;
 
 interface MachinesProps {
   onSelectMachine: (machineId: string) => void;
+  engineDashboard?: FactoryDashboardResponse | null;
 }
 
-export default function Machines({ onSelectMachine }: MachinesProps) {
+export default function Machines({ onSelectMachine, engineDashboard: initialDashboard }: MachinesProps) {
+  const [dashboard, setDashboard] = useState<FactoryDashboardResponse | null>(initialDashboard ?? null);
+  useEffect(() => {
+    if (initialDashboard) return;
+    getFactoryDashboard().then(setDashboard).catch(() => {});
+  }, [initialDashboard]);
   const [filter, setFilter] = useState<Filter>("alle");
   const [search, setSearch] = useState("");
+
+  const machines = (dashboard?.machines.machines ?? []).map((machine) => ({
+    id: machine.id,
+    name: machine.name ?? machine.id,
+    area: "Werkbereich",
+    productionLine: machine.production_line_id ?? "—",
+    status: machine.status === "warning" || machine.status === "degraded" ? "warning" : machine.status === "down" || machine.status === "offline" ? "critical" : "normal",
+  }));
+
+  const sensors = (dashboard?.sensors.sensors ?? []).map((sensor) => ({
+    machineId: String(sensor.machine_id ?? ""),
+    type: String(sensor.type ?? ""),
+    value: typeof sensor.value === "number" ? sensor.value : undefined,
+    unit: String(sensor.unit ?? ""),
+  }));
+
+  const maintenancePredictions: Array<{ machineId: string; failureProbability: number }> = [];
+
 
   const filteredMachines = useMemo(() => {
     const query = search.trim().toLowerCase();
